@@ -1,0 +1,20 @@
+{
+  "claims": {
+    "agent_class": "researcher",
+    "expires_at": "2025-12-31T23:59:59+00:00",
+    "issued_at": "2025-01-01T00:00:00+00:00",
+    "job_id": "test-job-001",
+    "services": [
+      {
+        "operation_class": "Read",
+        "resources": [
+          "*"
+        ],
+        "service": "episteme"
+      }
+    ]
+  },
+  "key_base64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "token": "eyJqb2JfaWQiOiJ0ZXN0LWpvYi0wMDEiLCJhZ2VudF9jbGFzcyI6InJlc2VhcmNoZXIiLCJpc3N1ZWRfYXQiOiIyMDI1LTAxLTAxVDAwOjAwOjAwWiIsImV4cGlyZXNfYXQiOiIyMDI1LTEyLTMxVDIzOjU5OjU5WiIsInNlcnZpY2VzIjpbeyJzZXJ2aWNlIjoiZXBpc3RlbWUiLCJvcGVyYXRpb25fY2xhc3MiOiJyZWFkIiwicmVzb3VyY2VzIjpbIioiXX1dfQ.70d11fa28e0d49b5387d51053571514e9591557391c27f8c4f8984551d58c628"
+}

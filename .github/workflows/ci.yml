@@ -66,6 +66,39 @@ jobs:
       - name: Build check
         run: npm run build --if-present
 
+  cross-language-tokens:
+    name: Cross-language token verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install tsx
+        run: npm install -g tsx
+
+      - name: Generate fixture from Rust
+        run: |
+          cargo test -p cloak-tokens --lib -- --ignored --nocapture 2>/dev/null \
+            | sed -n '/^{$/,/^}$/p' > tests/cross-language/fixture.json
+
+      - name: Verify with Python
+        run: python3 tests/cross-language/verify_token.py
+
+      - name: Verify with TypeScript
+        run: npx tsx tests/cross-language/verify_token.ts
+
   format:
     name: Formatting
     runs-on: ubuntu-latest
