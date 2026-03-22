@@ -22,7 +22,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 step=0
-total_steps=12
+total_steps=13
 
 banner() {
     echo ""
@@ -53,6 +53,13 @@ prompt_yn() {
 prompt_value() {
     local msg="$1" default="$2"
     read -rp "$(echo -e "${YELLOW}$msg${NC} [${default}]: ")" value
+    echo "${value:-$default}"
+}
+
+prompt_secret() {
+    local msg="$1" default="$2"
+    read -srp "$(echo -e "${YELLOW}$msg${NC} [${default:+****}]: ")" value
+    echo ""
     echo "${value:-$default}"
 }
 
@@ -95,7 +102,8 @@ apt-get install -y -qq \
     npm \
     python3 \
     python3-pip \
-    python3-venv
+    python3-venv \
+    iproute2
 
 # ── Step 2: Rust toolchain ───────────────────────────────────────────────────
 progress "Installing Rust toolchain"
@@ -140,7 +148,7 @@ cd "$PANORAMA_DIR"
 cargo build --release 2>&1 | tail -5
 
 echo "Built binaries:"
-ls -la target/release/{cloak-server,cortex-api,gateway,datastore,wheelhouse,admin-interface,analog-communications} 2>/dev/null || true
+ls -la target/release/{cloak-server,cortex-api,cortex-mcp,gateway,datastore,wheelhouse,admin-interface,analog-communications} 2>/dev/null || true
 
 # ── Step 6: Build Cerebro (TypeScript) ───────────────────────────────────────
 progress "Building Cerebro (TypeScript)"
@@ -177,26 +185,37 @@ CORTEX_PORT=$(prompt_value "Cortex port" "9000")
 DATASTORE_PORT=$(prompt_value "Datastore port" "8102")
 GATEWAY_PORT=$(prompt_value "Gateway port" "8800")
 GATEWAY_ADMIN_PORT=$(prompt_value "Gateway admin port" "8801")
-WHEELHOUSE_PORT=$(prompt_value "Wheelhouse port" "8500")
+WHEELHOUSE_PORT=$(prompt_value "Wheelhouse port" "8200")
 ADMIN_PORT=$(prompt_value "Admin interface port" "8400")
 ANALOG_PORT=$(prompt_value "Analog communications port" "8600")
 
 echo ""
 echo "External service configuration:"
 INFISICAL_URL=$(prompt_value "Infisical URL" "https://infisical.example.com")
-INFISICAL_TOKEN=$(prompt_value "Infisical service token" "changeme")
+INFISICAL_TOKEN=$(prompt_secret "Infisical service token" "changeme")
 INFISICAL_PROJECT=$(prompt_value "Infisical project ID" "")
 INFISICAL_ENV=$(prompt_value "Infisical environment" "production")
 
 echo ""
-ADMIN_PASSWORD=$(prompt_value "Admin interface password" "$(openssl rand -hex 16)")
-MEILI_KEY=$(prompt_value "Meilisearch master key" "$(openssl rand -hex 16)")
+ADMIN_PASSWORD=$(prompt_secret "Admin interface password" "$(openssl rand -hex 16)")
+MEILI_KEY=$(prompt_secret "Meilisearch master key" "$(openssl rand -hex 16)")
 
 echo ""
 echo "Analog Communications (SMS):"
-TELNYX_PUBLIC_KEY=$(prompt_value "Telnyx Ed25519 public key (or empty)" "")
+TELNYX_PUBLIC_KEY=$(prompt_value "Telnyx Ed25519 public key (base64, or empty)" "")
 ANALOG_OWNER_NUMBER=$(prompt_value "Owner phone number (E.164)" "")
 ANALOG_ALLOWED_SENDERS=$(prompt_value "Allowed sender numbers (comma-separated)" "$ANALOG_OWNER_NUMBER")
+OWNER_TOTP_SECRET=$(prompt_secret "Owner TOTP shared secret (base32, or empty)" "")
+
+echo ""
+echo "Security:"
+TAILSCALE_INTERFACE=$(prompt_value "Tailscale interface name (or empty for 0.0.0.0)" "")
+WEBAUTHN_RP_ID=$(prompt_value "WebAuthn RP ID (e.g. admin.yourdomain.ts.net, or empty)" "")
+if [[ -n "$WEBAUTHN_RP_ID" ]]; then
+    WEBAUTHN_RP_ORIGIN=$(prompt_value "WebAuthn RP origin URL" "https://$WEBAUTHN_RP_ID")
+else
+    WEBAUTHN_RP_ORIGIN=""
+fi
 
 # Write .env
 cat > "$PANORAMA_DIR/.env" <<ENVEOF
@@ -214,13 +233,14 @@ LOG_LEVEL=info
 
 # Cortex
 CORTEX_PORT=$CORTEX_PORT
-CORTEX_MANIFEST_PATH=$PANORAMA_DIR/cortex-manifest.toml
+CORTEX_MANIFEST=$PANORAMA_DIR/cortex-manifest.toml
 CLOAK_URL=http://127.0.0.1:$CLOAK_PORT
 
 # Datastore
 DATASTORE_PORT=$DATASTORE_PORT
 DATASTORE_SQLITE_PATH=$DATA_DIR/datastore.db
 DATASTORE_BLOB_PATH=$DATA_DIR/blobs
+DATASTORE_URL=http://127.0.0.1:$DATASTORE_PORT
 
 # Gateway
 GATEWAY_PORT=$GATEWAY_PORT
@@ -228,22 +248,29 @@ GATEWAY_ADMIN_PORT=$GATEWAY_ADMIN_PORT
 
 # Wheelhouse
 WHEELHOUSE_PORT=$WHEELHOUSE_PORT
+WHEELHOUSE_URL=http://127.0.0.1:$WHEELHOUSE_PORT
 
 # Admin Interface
 ADMIN_PORT=$ADMIN_PORT
 ADMIN_PASSWORD=$ADMIN_PASSWORD
-CLOAK_URL=http://127.0.0.1:$CLOAK_PORT
 CORTEX_URL=http://127.0.0.1:$CORTEX_PORT
 EPISTEME_URL=http://127.0.0.1:8100
 CEREBRO_URL=http://127.0.0.1:8101
-DATASTORE_URL=http://127.0.0.1:$DATASTORE_PORT
 GATEWAY_URL=http://127.0.0.1:$GATEWAY_PORT
+LOG_DB_PATH=$LOG_DB
+
+# Admin security
+TAILSCALE_INTERFACE=$TAILSCALE_INTERFACE
+WEBAUTHN_RP_ID=$WEBAUTHN_RP_ID
+WEBAUTHN_RP_ORIGIN=$WEBAUTHN_RP_ORIGIN
+WEBAUTHN_CREDENTIALS_PATH=$DATA_DIR/webauthn_credentials.json
 
 # Analog Communications
 ANALOG_PORT=$ANALOG_PORT
 TELNYX_PUBLIC_KEY=$TELNYX_PUBLIC_KEY
 ANALOG_OWNER_NUMBER=$ANALOG_OWNER_NUMBER
 ANALOG_ALLOWED_SENDERS=$ANALOG_ALLOWED_SENDERS
+OWNER_TOTP_SECRET=$OWNER_TOTP_SECRET
 
 # Cerebro dependencies
 MEILI_KEY=$MEILI_KEY
@@ -277,11 +304,20 @@ for entry in "${RUST_SERVICES[@]}"; do
     IFS=: read -r bin desc port <<< "$entry"
     service_name="panorama-${bin}"
 
+    # Cloak has no dependency on itself
+    if [[ "$bin" == "cloak-server" ]]; then
+        after="After=network.target"
+        wants=""
+    else
+        after="After=network.target panorama-cloak-server.service"
+        wants="Wants=panorama-cloak-server.service"
+    fi
+
     cat > "/etc/systemd/system/${service_name}.service" <<UNITEOF
 [Unit]
 Description=Panorama — $desc
-After=network.target
-Wants=panorama-cloak-server.service
+$after
+$wants
 
 [Service]
 Type=simple
@@ -306,7 +342,7 @@ done
 cat > "/etc/systemd/system/panorama-cerebro.service" <<UNITEOF
 [Unit]
 Description=Panorama — Cerebro Knowledge Graph
-After=network.target docker.service
+After=network.target docker.service panorama-cloak-server.service
 Requires=docker.service
 
 [Service]
@@ -323,6 +359,29 @@ WantedBy=multi-user.target
 UNITEOF
 echo "  Created panorama-cerebro.service"
 
+# cortex-mcp (MCP tool server — not a daemon, invoked by AI clients)
+cat > "/etc/systemd/system/panorama-cortex-mcp@.service" <<UNITEOF
+[Unit]
+Description=Panorama — Cortex MCP Server (instance %i)
+After=network.target panorama-cortex-api.service
+Wants=panorama-cortex-api.service
+
+[Service]
+Type=simple
+User=$PANORAMA_USER
+WorkingDirectory=$PANORAMA_DIR
+EnvironmentFile=$PANORAMA_DIR/.env
+ExecStart=$PANORAMA_DIR/target/release/cortex-mcp
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+SyslogIdentifier=panorama-cortex-mcp
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+echo "  Created panorama-cortex-mcp@.service (template for MCP clients)"
+
 systemctl daemon-reload
 
 # ── Step 11: Set ownership ───────────────────────────────────────────────────
@@ -331,7 +390,28 @@ progress "Setting file ownership"
 chown -R "$PANORAMA_USER:$PANORAMA_USER" "$PANORAMA_DIR"
 chown -R "$PANORAMA_USER:$PANORAMA_USER" /var/log/panorama
 
-# ── Step 12: Start services ──────────────────────────────────────────────────
+# ── Step 12: Install MCP configuration ───────────────────────────────────────
+progress "Setting up MCP tool server"
+
+echo "cortex-mcp can be used as an MCP tool server for AI coding assistants."
+echo "It reads cortex-manifest.toml and exposes Panorama services as callable tools."
+echo ""
+echo "To use with Claude Code, add to your MCP config:"
+echo ""
+echo "  {"
+echo "    \"mcpServers\": {"
+echo "      \"panorama\": {"
+echo "        \"command\": \"$PANORAMA_DIR/target/release/cortex-mcp\","
+echo "        \"env\": {"
+echo "          \"CORTEX_URL\": \"http://127.0.0.1:$CORTEX_PORT\","
+echo "          \"CORTEX_MANIFEST\": \"$PANORAMA_DIR/cortex-manifest.toml\""
+echo "        }"
+echo "      }"
+echo "    }"
+echo "  }"
+echo ""
+
+# ── Step 13: Start services ──────────────────────────────────────────────────
 progress "Starting services"
 
 # Boot order matters: Cloak must be up before services that register with it.
@@ -370,6 +450,7 @@ echo "  Config:        $PANORAMA_DIR/.env"
 echo "  Data:          $DATA_DIR/"
 echo "  Logs DB:       $LOG_DB"
 echo "  Binaries:      $PANORAMA_DIR/target/release/"
+echo "  Credentials:   $DATA_DIR/webauthn_credentials.json"
 echo ""
 echo "  Service ports:"
 echo "    Cloak:       http://127.0.0.1:$CLOAK_PORT"
@@ -380,15 +461,35 @@ echo "    Wheelhouse:  http://127.0.0.1:$WHEELHOUSE_PORT"
 echo "    Admin:       http://127.0.0.1:$ADMIN_PORT"
 echo "    Analog:      http://127.0.0.1:$ANALOG_PORT"
 echo ""
+echo "  MCP tools:     $PANORAMA_DIR/target/release/cortex-mcp (12 tools)"
+echo ""
 echo "  Commands:"
 echo "    sudo systemctl status 'panorama-*'"
 echo "    sudo journalctl -u panorama-cloak-server -f"
 echo "    sqlite3 $LOG_DB 'SELECT * FROM _system_logs ORDER BY timestamp DESC LIMIT 10'"
 echo ""
-echo -e "  ${YELLOW}REMAINING SETUP:${NC}"
+echo -e "  ${YELLOW}POST-INSTALL CHECKLIST:${NC}"
 echo "    1. Configure Infisical with real credentials in .env"
-echo "    2. Set up Tailscale and restrict admin-interface to tailnet"
-echo "    3. Configure YubiKey FIDO2 for admin auth (not yet implemented)"
-echo "    4. Initialize Episteme (Python service at :8100)"
-echo "    5. Set Telnyx webhook URL to http://<your-domain>/sms-inbound"
+if [[ -z "$TAILSCALE_INTERFACE" ]]; then
+echo "    2. Set up Tailscale: install, join tailnet, set TAILSCALE_INTERFACE in .env"
+else
+echo "    2. Tailscale interface configured: $TAILSCALE_INTERFACE ✓"
+fi
+if [[ -z "$WEBAUTHN_RP_ID" ]]; then
+echo "    3. Set WEBAUTHN_RP_ID + WEBAUTHN_RP_ORIGIN in .env for YubiKey auth"
+else
+echo "    3. WebAuthn configured for $WEBAUTHN_RP_ID — register key at /auth/register ✓"
+fi
+if [[ -z "$TELNYX_PUBLIC_KEY" ]]; then
+echo "    4. Set TELNYX_PUBLIC_KEY in .env for webhook signature verification"
+else
+echo "    4. Telnyx Ed25519 verification configured ✓"
+fi
+if [[ -z "$OWNER_TOTP_SECRET" ]]; then
+echo "    5. Set OWNER_TOTP_SECRET in .env for owner TOTP verification"
+else
+echo "    5. Owner TOTP verification configured ✓"
+fi
+echo "    6. Set Telnyx webhook URL to https://<your-domain>/sms-inbound"
+echo "    7. Initialize Episteme (Python service at :8100)"
 echo ""
