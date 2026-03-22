@@ -1503,6 +1503,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "panorama-errors"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "panorama-integration-tests"
 version = "0.1.0"
 dependencies = [
@@ -1513,6 +1526,21 @@ dependencies = [
  "serde_json",
  "test-harness",
  "tokio",
+]
+
+[[package]]
+name = "panorama-logging"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "panorama-errors",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

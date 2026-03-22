@@ -32,6 +32,10 @@ members = [
     # Analog communications — SMS inbound, IDEA pipeline
     "crates/analog-communications",
 
+    # Shared infrastructure
+    "crates/panorama-errors",
+    "crates/panorama-logging",
+
     # Test infrastructure
     "crates/test-harness",
     "tests/integration",
