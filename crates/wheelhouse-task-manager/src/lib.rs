@@ -86,3 +86,13 @@ pub enum TaskValidationError {
     #[error("Invalid value: {0}")]
     InvalidValue(String),
 }
+
+impl From<TaskValidationError> for panorama_errors::PanoramaError {
+    fn from(err: TaskValidationError) -> Self {
+        let (code, detail) = match &err {
+            TaskValidationError::MissingField(f) => ("WH-001", Some(f.clone())),
+            TaskValidationError::InvalidValue(v) => ("WH-002", Some(v.clone())),
+        };
+        panorama_errors::PanoramaError::from_code(code, "wheelhouse", detail)
+    }
+}

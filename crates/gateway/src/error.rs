@@ -1,5 +1,6 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use panorama_errors::PanoramaError;
 use serde_json::json;
 
 #[derive(Debug, thiserror::Error)]
@@ -103,5 +104,26 @@ impl From<anyhow::Error> for GatewayApiError {
 impl From<rusqlite::Error> for GatewayApiError {
     fn from(err: rusqlite::Error) -> Self {
         GatewayApiError::Internal(format!("database error: {err}"))
+    }
+}
+
+impl From<GatewayApiError> for PanoramaError {
+    fn from(err: GatewayApiError) -> Self {
+        let (code, detail) = match &err {
+            GatewayApiError::BadRequest(d) => ("GW-001", Some(d.clone())),
+            GatewayApiError::Unauthorized(d) => ("GW-002", Some(d.clone())),
+            GatewayApiError::NotFound(d) => ("GW-003", Some(d.clone())),
+            GatewayApiError::RateLimited { retry_after_secs } => {
+                ("GW-004", Some(format!("retry after {retry_after_secs}s")))
+            }
+            GatewayApiError::Conflict {
+                original_request_id,
+            } => ("GW-005", Some(format!("duplicate of {original_request_id}"))),
+            GatewayApiError::PaymentRequired(d) => ("GW-006", Some(d.clone())),
+            GatewayApiError::ServiceUnavailable(d) => ("GW-007", Some(d.clone())),
+            GatewayApiError::BadGateway(d) => ("GW-008", Some(d.clone())),
+            GatewayApiError::Internal(d) => ("GW-009", Some(d.clone())),
+        };
+        PanoramaError::from_code(code, "gateway", detail)
     }
 }

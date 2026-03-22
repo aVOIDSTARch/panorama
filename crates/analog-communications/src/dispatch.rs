@@ -70,3 +70,18 @@ pub enum DispatchError {
     #[error("Unauthorized sender")]
     Unauthorized,
 }
+
+impl From<DispatchError> for panorama_errors::PanoramaError {
+    fn from(err: DispatchError) -> Self {
+        let (code, detail) = match &err {
+            DispatchError::NetworkError(d) => ("AC-001", Some(d.clone())),
+            DispatchError::DownstreamError {
+                service,
+                status,
+                body,
+            } => ("AC-002", Some(format!("{service} HTTP {status}: {body}"))),
+            DispatchError::Unauthorized => ("AC-003", None),
+        };
+        panorama_errors::PanoramaError::from_code(code, "analog-communications", detail)
+    }
+}

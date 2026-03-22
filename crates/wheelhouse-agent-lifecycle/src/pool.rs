@@ -211,3 +211,23 @@ pub enum AgentPoolError {
         to: AgentStatus,
     },
 }
+
+impl From<AgentPoolError> for panorama_errors::PanoramaError {
+    fn from(err: AgentPoolError) -> Self {
+        let (code, detail) = match &err {
+            AgentPoolError::NotFound(id) => ("WH-003", Some(id.clone())),
+            AgentPoolError::PoolFull { max } => {
+                ("WH-004", Some(format!("max capacity: {max}")))
+            }
+            AgentPoolError::InvalidTransition {
+                agent_id,
+                from,
+                to,
+            } => (
+                "WH-005",
+                Some(format!("agent {agent_id}: {from:?} -> {to:?}")),
+            ),
+        };
+        panorama_errors::PanoramaError::from_code(code, "wheelhouse", detail)
+    }
+}

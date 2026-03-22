@@ -14,3 +14,4 @@ tracing = { workspace = true }
 tokio = { workspace = true }
 dashmap = { workspace = true }
 wheelhouse-task-manager = { path = "../wheelhouse-task-manager" }
+panorama-errors = { path = "../panorama-errors" }

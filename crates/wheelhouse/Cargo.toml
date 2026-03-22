@@ -46,3 +46,5 @@ cloak-core = { path = "../cloak-core" }
 # Wheelhouse sub-crates
 wheelhouse-task-manager = { path = "../wheelhouse-task-manager" }
 wheelhouse-agent-lifecycle = { path = "../wheelhouse-agent-lifecycle" }
+panorama-errors = { path = "../panorama-errors" }
+panorama-logging = { path = "../panorama-logging" }

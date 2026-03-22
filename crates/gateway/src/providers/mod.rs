@@ -3,6 +3,7 @@ pub mod custom;
 pub mod openai;
 
 use crate::types::{Provider, ProviderResponse, Route, SanitizedRequest};
+use panorama_errors::PanoramaError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProviderError {
@@ -42,5 +43,24 @@ pub async fn dispatch(
         Provider::Custom { .. } => {
             custom::dispatch(client, route, request, &api_key).await
         }
+    }
+}
+
+impl From<ProviderError> for PanoramaError {
+    fn from(err: ProviderError) -> Self {
+        let (code, detail) = match &err {
+            ProviderError::Timeout => ("PROV-001", None),
+            ProviderError::RateLimit { retry_after_secs } => {
+                ("PROV-002", retry_after_secs.map(|s| format!("retry after {s}s")))
+            }
+            ProviderError::ServerError { status, body } => {
+                ("PROV-003", Some(format!("HTTP {status}: {body}")))
+            }
+            ProviderError::ConnectionError(d) => ("PROV-004", Some(d.clone())),
+            ProviderError::InvalidResponse(d) => ("PROV-005", Some(d.clone())),
+            ProviderError::AuthenticationError(d) => ("PROV-006", Some(d.clone())),
+            ProviderError::MissingApiKey(d) => ("PROV-007", Some(d.clone())),
+        };
+        PanoramaError::from_code(code, "gateway", detail)
     }
 }

@@ -38,3 +38,4 @@ anyhow = { workspace = true }
 # Cloak integration
 cloak-sdk = { path = "../cloak-sdk" }
 cloak-core = { path = "../cloak-core" }
+panorama-logging = { path = "../panorama-logging" }

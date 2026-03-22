@@ -154,3 +154,18 @@ pub enum OrchestratorError {
     #[error("Task not found at index {0}")]
     TaskNotFound(usize),
 }
+
+impl From<OrchestratorError> for panorama_errors::PanoramaError {
+    fn from(err: OrchestratorError) -> Self {
+        let (code, detail) = match &err {
+            OrchestratorError::TaskCreation(d) => ("WH-006", Some(d.clone())),
+            OrchestratorError::AgentSpawn(d) => ("WH-007", Some(d.clone())),
+            OrchestratorError::AgentAssignment(d) => ("WH-008", Some(d.clone())),
+            OrchestratorError::AgentFate(d) => ("WH-009", Some(d.clone())),
+            OrchestratorError::TaskNotFound(idx) => {
+                ("WH-010", Some(format!("index: {idx}")))
+            }
+        };
+        panorama_errors::PanoramaError::from_code(code, "wheelhouse", detail)
+    }
+}

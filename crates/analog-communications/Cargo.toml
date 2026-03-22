@@ -46,3 +46,5 @@ regex = { workspace = true }
 # Cloak integration
 cloak-sdk = { path = "../cloak-sdk" }
 cloak-core = { path = "../cloak-core" }
+panorama-errors = { path = "../panorama-errors" }
+panorama-logging = { path = "../panorama-logging" }

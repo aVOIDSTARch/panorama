@@ -66,3 +66,16 @@ pub enum SanitizationError {
     #[error("Message too long ({actual} bytes, max {max})")]
     TooLong { actual: usize, max: usize },
 }
+
+impl From<SanitizationError> for panorama_errors::PanoramaError {
+    fn from(err: SanitizationError) -> Self {
+        let (code, detail) = match &err {
+            SanitizationError::InvalidSender(s) => ("AC-004", Some(s.clone())),
+            SanitizationError::EmptyBody => ("AC-005", None),
+            SanitizationError::TooLong { actual, max } => {
+                ("AC-006", Some(format!("{actual} bytes, max {max}")))
+            }
+        };
+        panorama_errors::PanoramaError::from_code(code, "analog-communications", detail)
+    }
+}

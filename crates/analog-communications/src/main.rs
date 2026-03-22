@@ -7,12 +7,7 @@ use analog_communications::AppState;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
+    panorama_logging::init("analog-communications", Some("data/panorama_logs.db"));
 
     let config = AnalogConfig::from_env().expect("failed to load config");
     let port = config.port;

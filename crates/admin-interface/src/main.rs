@@ -7,12 +7,7 @@ use admin_interface::auth;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
+    panorama_logging::init("admin-interface", Some("data/panorama_logs.db"));
 
     let state = Arc::new(api::health::AppState::from_env());
     let port: u16 = std::env::var("ADMIN_PORT")

@@ -1,3 +1,4 @@
+use panorama_errors::PanoramaError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -101,5 +102,25 @@ impl ServiceManifest {
         let content = std::fs::read_to_string(path)
             .map_err(|e| CortexError::Internal(format!("Failed to read manifest: {e}")))?;
         Self::from_toml(&content)
+    }
+}
+
+impl From<CortexError> for PanoramaError {
+    fn from(err: CortexError) -> Self {
+        let (code, detail) = match &err {
+            CortexError::ServiceUnavailable { service } => {
+                ("CTX-001", Some(service.clone()))
+            }
+            CortexError::ServiceNotFound { service } => {
+                ("CTX-002", Some(service.clone()))
+            }
+            CortexError::AuthServiceUnavailable => ("CTX-003", None),
+            CortexError::InvalidToken => ("CTX-004", None),
+            CortexError::InsufficientPermissions => ("CTX-005", None),
+            CortexError::Timeout => ("CTX-006", None),
+            CortexError::ProxyError(d) => ("CTX-007", Some(d.clone())),
+            CortexError::Internal(d) => ("CTX-008", Some(d.clone())),
+        };
+        PanoramaError::from_code(code, "cortex", detail)
     }
 }

@@ -1,5 +1,6 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use panorama_errors::PanoramaError;
 use serde_json::json;
 
 #[derive(Debug, thiserror::Error)]
@@ -79,5 +80,26 @@ impl IntoResponse for CloakError {
         });
 
         (status, axum::Json(body)).into_response()
+    }
+}
+
+impl From<CloakError> for PanoramaError {
+    fn from(err: CloakError) -> Self {
+        let (code, detail) = match &err {
+            CloakError::InfisicalUnavailable => ("CLOAK-001", None),
+            CloakError::InvalidToken(d) => ("CLOAK-002", Some(d.clone())),
+            CloakError::MalformedToken => ("CLOAK-003", None),
+            CloakError::MissingToken => ("CLOAK-004", None),
+            CloakError::InvalidSignature => ("CLOAK-005", None),
+            CloakError::NoSigningKey => ("CLOAK-006", None),
+            CloakError::InsufficientPermissions(d) => ("CLOAK-007", Some(d.clone())),
+            CloakError::ServiceNotInScope(d) => ("CLOAK-008", Some(d.clone())),
+            CloakError::ServiceNotRegistered(d) => ("CLOAK-009", Some(d.clone())),
+            CloakError::RegistrationFailed(d) => ("CLOAK-010", Some(d.clone())),
+            CloakError::Halted(d) => ("CLOAK-011", Some(d.clone())),
+            CloakError::Config(d) => ("CLOAK-012", Some(d.clone())),
+            CloakError::Internal(d) => ("CLOAK-013", Some(d.clone())),
+        };
+        PanoramaError::from_code(code, "cloak", detail)
     }
 }
