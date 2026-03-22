@@ -1,4 +1,3 @@
-pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Cortex MCP starting...");
-    Ok(())
-}
+pub mod protocol;
+pub mod server;
+pub mod tools;

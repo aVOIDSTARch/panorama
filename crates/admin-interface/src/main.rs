@@ -35,6 +35,9 @@ async fn main() {
         .route("/api/errors/recent", routing::get(api::errors::errors_recent_panel))
         .route("/api/halt", routing::get(api::halt::halt_panel))
         .route("/api/permissions", routing::get(api::permissions::permissions_panel))
+        .route("/api/wheelhouse", routing::get(api::wheelhouse::wheelhouse_panel))
+        .route("/api/config", routing::get(api::config_viewer::config_panel))
+        .route("/api/identity", routing::get(api::identity::identity_panel))
         // HTMX API fragments — mutations
         .route("/api/halt/all", routing::post(api::halt::halt_all))
         .route("/api/halt/resume", routing::post(api::halt::resume))

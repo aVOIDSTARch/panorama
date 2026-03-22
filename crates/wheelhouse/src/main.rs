@@ -20,6 +20,7 @@ async fn main() {
     let api = Router::new()
         .route("/jobs", routing::post(hub::submit_job))
         .route("/status", routing::get(hub::status))
+        .route("/agents", routing::get(hub::agents))
         .layer(middleware::from_fn_with_state(
             state.cloak.clone(),
             cloak_sdk::middleware::cloak_auth,

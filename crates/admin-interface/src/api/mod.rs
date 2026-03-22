@@ -1,8 +1,11 @@
+pub mod config_viewer;
 pub mod errors;
 pub mod halt;
 pub mod health;
+pub mod identity;
 pub mod logs;
 pub mod permissions;
+pub mod wheelhouse;
 
 use axum::response::Html;
 
@@ -28,6 +31,22 @@ pub async fn dashboard() -> Html<String> {
             </div>
             <div class="card" id="permissions-panel" hx-get="/api/permissions" hx-trigger="load, every 30s" hx-swap="innerHTML">
                 <h3>Permissions</h3>
+                <p class="loading">Loading...</p>
+            </div>
+        </div>
+        <div style="margin-top:1.5rem">
+            <div class="card" hx-get="/api/config" hx-trigger="load" hx-swap="innerHTML">
+                <h3>Service Configuration</h3>
+                <p class="loading">Loading...</p>
+            </div>
+        </div>
+        <div class="grid" style="margin-top:1.5rem">
+            <div class="card" hx-get="/api/wheelhouse" hx-trigger="load, every 10s" hx-swap="innerHTML">
+                <h3>Wheelhouse Agents</h3>
+                <p class="loading">Loading...</p>
+            </div>
+            <div class="card" hx-get="/api/identity" hx-trigger="load, every 30s" hx-swap="innerHTML">
+                <h3>SMS Identity</h3>
                 <p class="loading">Loading...</p>
             </div>
         </div>
@@ -164,6 +183,8 @@ code {{ background: #0d1117; padding: 0.15rem 0.4rem; border-radius: 3px; font-s
 .perm-form {{ display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }}
 .perm-form input, .perm-form select {{ background: var(--bg); color: var(--text); border: 1px solid #333; border-radius: 4px; padding: 0.4rem 0.6rem; font-size: 0.85rem; }}
 .perm-form input {{ flex: 1; min-width: 120px; }}
+.pool-summary {{ display: flex; gap: 1.5rem; margin-bottom: 1rem; }}
+.pool-summary .stat {{ font-size: 0.95rem; }}
 </style>
 </head><body>
 <nav>

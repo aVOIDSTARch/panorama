@@ -144,6 +144,57 @@ mod tests {
         ));
     }
 
+    /// Generate a cross-language verification fixture.
+    /// Run with: cargo test -p cloak-tokens -- --ignored --nocapture test_cross_language_fixture
+    #[test]
+    #[ignore]
+    fn test_cross_language_fixture() {
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use base64::Engine;
+
+        // Use a deterministic key for the fixture
+        let key: Vec<u8> = (0..32).collect(); // 0x00..0x1f
+        let key_hex: String = key.iter().map(|b| format!("{b:02x}")).collect();
+        let key_b64 = URL_SAFE_NO_PAD.encode(&key);
+
+        let claims = TokenClaims {
+            job_id: "test-job-001".into(),
+            agent_class: "researcher".into(),
+            issued_at: chrono::DateTime::parse_from_rfc3339("2025-01-01T00:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            expires_at: chrono::DateTime::parse_from_rfc3339("2025-12-31T23:59:59Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            services: vec![ServiceScope {
+                service: "episteme".into(),
+                operation_class: OperationClass::Read,
+                resources: vec!["*".into()],
+            }],
+        };
+
+        let token = sign_claims(&claims, &key).unwrap();
+
+        let fixture = serde_json::json!({
+            "token": token,
+            "key_hex": key_hex,
+            "key_base64": key_b64,
+            "claims": {
+                "job_id": claims.job_id,
+                "agent_class": claims.agent_class,
+                "issued_at": claims.issued_at.to_rfc3339(),
+                "expires_at": claims.expires_at.to_rfc3339(),
+                "services": [{
+                    "service": "episteme",
+                    "operation_class": "Read",
+                    "resources": ["*"]
+                }]
+            }
+        });
+
+        println!("{}", serde_json::to_string_pretty(&fixture).unwrap());
+    }
+
     #[test]
     fn test_malformed_token() {
         let key = generate_signing_key();

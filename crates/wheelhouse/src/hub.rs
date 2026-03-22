@@ -61,6 +61,14 @@ pub async fn status(State(state): State<AppState>) -> impl IntoResponse {
     }))
 }
 
+/// List all agents in the pool.
+pub async fn agents(State(state): State<AppState>) -> impl IntoResponse {
+    let agents = state.orchestrator.agents_list();
+    Json(json!({
+        "agents": agents,
+    }))
+}
+
 /// Health check.
 pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
     let halted = state.cloak.is_halted().await;

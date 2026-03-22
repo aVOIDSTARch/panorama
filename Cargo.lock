@@ -18,6 +18,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "toml",
  "tower",
  "tower-http",
  "tracing",
@@ -594,14 +595,15 @@ dependencies = [
 name = "cortex-mcp"
 version = "0.1.0"
 dependencies = [
- "axum",
- "cortex-auth",
+ "anyhow",
  "cortex-core",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

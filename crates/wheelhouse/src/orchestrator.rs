@@ -123,6 +123,11 @@ impl Orchestrator {
         Ok(())
     }
 
+    /// Get a snapshot of all agents in the pool.
+    pub fn agents_list(&self) -> Vec<wheelhouse_agent_lifecycle::pool::AgentHandle> {
+        self.agent_pool.list()
+    }
+
     /// Get agent pool stats.
     pub fn pool_stats(&self) -> PoolStats {
         PoolStats {
