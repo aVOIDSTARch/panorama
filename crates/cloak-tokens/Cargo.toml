@@ -1,0 +1,19 @@
+[package]
+name = "cloak-tokens"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cloak-core = { path = "../cloak-core" }
+cloak-secrets = { path = "../cloak-secrets" }
+cloak-permissions = { path = "../cloak-permissions" }
+tokio = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }

@@ -1,0 +1,23 @@
+# Cortex service manifest — defines downstream services and their configuration.
+# Each service is accessible through Cortex at /{service_name}/...
+
+[services.episteme]
+name = "Episteme"
+base_url = "http://localhost:8100"
+health_path = "/health"
+timeout_ms = 5000
+queue_ttl_s = 30
+
+[services.cerebro]
+name = "Cerebro"
+base_url = "http://localhost:8101"
+health_path = "/health"
+timeout_ms = 5000
+queue_ttl_s = 30
+
+[services.datastore]
+name = "Datastore"
+base_url = "http://localhost:8102"
+health_path = "/health"
+timeout_ms = 10000
+queue_ttl_s = 60

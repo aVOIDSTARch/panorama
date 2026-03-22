@@ -1,0 +1,17 @@
+[package]
+name = "cortex-auth"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+
+[dependencies]
+cortex-core = { path = "../cortex-core" }
+cloak-sdk = { path = "../cloak-sdk" }
+cloak-core = { path = "../cloak-core" }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

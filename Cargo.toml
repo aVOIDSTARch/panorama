@@ -1,0 +1,97 @@
+[workspace]
+members = [
+    # Cloak — auth, secrets, permissions, tokens
+    "crates/cloak-core",
+    "crates/cloak-registry",
+    "crates/cloak-permissions",
+    "crates/cloak-secrets",
+    "crates/cloak-tokens",
+    "crates/cloak-server",
+    "crates/cloak-sdk",
+
+    # Cortex — service proxy, orchestration
+    "crates/cortex-core",
+    "crates/cortex-api",
+    "crates/cortex-mcp",
+    "crates/cortex-auth",
+
+    # Gateway — LLM provider routing
+    "crates/gateway",
+
+    # Datastore — multi-backend storage
+    "crates/datastore",
+
+    # Admin interface — Axum + HTMX panel
+    "crates/admin-interface",
+
+    # Wheelhouse — agent orchestration
+    "crates/wheelhouse-task-manager",
+    "crates/wheelhouse-agent-lifecycle",
+    "crates/wheelhouse",
+
+    # Analog communications — SMS inbound, IDEA pipeline
+    "crates/analog-communications",
+]
+resolver = "2"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+# HTTP server
+axum = "0.7"
+axum-extra = { version = "0.9", features = ["typed-header"] }
+
+# Middleware
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors", "timeout"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Crypto / hashing
+sha2 = "0.10"
+hmac = "0.12"
+base64 = "0.22"
+rand = "0.8"
+
+# Identity
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging / tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Concurrency
+dashmap = "6"
+
+# Database
+rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Regex
+regex = "1"
+
+# Rate limiting
+governor = "0.6"
+
+# Environment
+dotenvy = "0.15"
+
+# Async trait
+async-trait = "0.1"

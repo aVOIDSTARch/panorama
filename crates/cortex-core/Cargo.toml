@@ -1,0 +1,14 @@
+[package]
+name = "cortex-core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+
+[dependencies]
+cloak-core = { path = "../cloak-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+toml = { workspace = true }

@@ -1,0 +1,16 @@
+[package]
+name = "wheelhouse-agent-lifecycle"
+version = "0.1.0"
+edition = "2021"
+description = "Agent pool management and lifecycle for Wheelhouse"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+dashmap = { workspace = true }
+wheelhouse-task-manager = { path = "../wheelhouse-task-manager" }

@@ -1,0 +1,74 @@
+[package]
+name = "gateway"
+version = "0.1.0"
+edition = "2021"
+description = "Cloud Model Access Gateway — routes sanitized prompts to cloud LLM providers"
+license = "MIT"
+
+[lib]
+name = "gateway"
+path = "src/lib.rs"
+
+[[bin]]
+name = "gateway"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true }
+
+# HTTP server
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+
+# HTTP client (provider dispatch)
+reqwest = { workspace = true, features = ["rustls-tls"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Configuration
+toml = { workspace = true }
+
+# Database
+rusqlite = { workspace = true }
+
+# Crypto / hashing
+sha2 = { workspace = true }
+hmac = { workspace = true }
+uuid = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# Logging / tracing
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# CLI
+clap = { workspace = true }
+
+# Regex (sanitization patterns)
+regex = { workspace = true }
+
+# Rate limiting (token bucket)
+governor = { workspace = true }
+
+# Environment variable handling
+dotenvy = { workspace = true }
+
+# Async trait
+async-trait = { workspace = true }
+
+# Cloak integration
+cloak-sdk = { path = "../cloak-sdk" }
+cloak-core = { path = "../cloak-core" }
+
+[dev-dependencies]
+tempfile = "3"

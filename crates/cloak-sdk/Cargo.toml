@@ -1,0 +1,21 @@
+[package]
+name = "cloak-sdk"
+version = "0.1.0"
+edition = "2021"
+description = "Reusable Cloak client library for Panorama services"
+
+[dependencies]
+cloak-core = { path = "../cloak-core" }
+cloak-tokens = { path = "../cloak-tokens" }
+tokio = { workspace = true }
+axum = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+tokio-stream = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

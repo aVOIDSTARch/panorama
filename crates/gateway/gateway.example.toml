@@ -1,0 +1,91 @@
+# Gateway — Cloud Model Access Gateway Configuration
+# Copy this file to gateway.toml and adjust for your environment.
+
+[server]
+host = "127.0.0.1"
+port = 8800
+admin_port = 8801                    # Admin endpoints on separate port; not exposed externally
+tls_cert_path = ""                   # Empty = no TLS (use Cloudflare Tunnel or Tailscale for transport security)
+request_timeout_secs = 30
+drain_timeout_secs = 60
+# admin_token_env = "GATEWAY_ADMIN_TOKEN"  # Env var holding the admin bearer token
+
+[database]
+operational_db_path = "data/gateway_logs.db"
+audit_db_path       = "data/gateway_audit.db"
+route_store_path    = "data/gateway_routes.db"
+operational_retention_days = 90
+
+[budgets]
+global_daily_usd     = 20.00
+per_caller_daily_usd = 5.00          # Default; can be overridden per-caller
+per_route_daily_usd  = 10.00         # Default; can be overridden per-route
+
+[health_probing]
+enabled = true
+default_interval_secs = 300
+probe_timeout_secs    = 10
+
+[deduplication]
+enabled     = true
+window_secs = 30
+
+[kill_switch]
+auto_drain_on_consecutive_criticals = 5
+auto_halt_on_credential_scrub       = true
+auto_drain_on_global_budget_hit     = false
+
+# --- Sanitizer ---
+[sanitizer]
+# Regex patterns to detect prompt injection attempts (inbound)
+injection_patterns = [
+    "ignore previous instructions",
+    "you are now",
+    "system prompt",
+]
+# Regex patterns to detect leaked API keys in provider responses (outbound)
+credential_patterns = [
+    "sk-[a-zA-Z0-9]{20,}",
+    "key-[a-zA-Z0-9]{20,}",
+    "Bearer [a-zA-Z0-9\\-._~+/]+=*",
+]
+
+# --- Alerts ---
+[alerts]
+
+[alerts.destinations.telnyx]
+enabled = false
+from_number = "+18334332269"
+to_numbers = ["+1XXXXXXXXXX"]
+api_key_env = "TELNYX_API_KEY"
+
+[alerts.destinations.webhook]
+enabled = false
+url = "https://your-webhook-endpoint.example.com/gateway-alerts"
+secret_env = "WEBHOOK_SECRET"
+
+[alerts.routing]
+DEBUG    = ["log"]
+INFO     = ["log"]
+WARN     = ["log", "webhook"]
+ERROR    = ["log", "webhook"]
+CRITICAL = ["log", "webhook", "sms"]
+
+[alerts.suppression]
+sms_cooldown_secs = 300              # Minimum gap between SMS alerts of the same level
+max_sms_per_hour  = 10               # Hard cap; excess alerts go to webhook only
+
+# --- Rate Limits ---
+[rate_limits.defaults]
+requests_per_minute = 60
+requests_per_hour   = 500
+
+# Per-caller overrides
+# [rate_limits.callers.wheelhouse-hub]
+# requests_per_minute = 120
+# requests_per_hour   = 2000
+
+# Per-route overrides
+# [rate_limits.routes.claude-opus]
+# requests_per_minute = 10
+# requests_per_hour   = 50
