@@ -1,5 +1,10 @@
-use axum::{extract::State, response::Html};
-use std::sync::Arc;
+use axum::extract::State;
+use axum::response::Html;
+use rusqlite::Connection;
+use std::sync::{Arc, Mutex};
+use webauthn_rs::prelude::*;
+
+use crate::auth::webauthn::StoredCredentials;
 
 /// Check health of all downstream services and return an HTMX fragment.
 pub async fn health_panel(State(state): State<Arc<AppState>>) -> Html<String> {
@@ -62,10 +67,78 @@ pub struct AppState {
     pub cerebro_url: String,
     pub datastore_url: String,
     pub gateway_url: String,
+    pub log_db: Option<Mutex<Connection>>,
+    // WebAuthn (FIDO2 / YubiKey)
+    pub webauthn: Option<Webauthn>,
+    pub webauthn_credentials: Mutex<StoredCredentials>,
+    pub webauthn_credentials_path: Option<String>,
+    pub webauthn_reg_state: Mutex<Option<PasskeyRegistration>>,
+    pub webauthn_auth_state: Mutex<Option<PasskeyAuthentication>>,
 }
 
 impl AppState {
     pub fn from_env() -> Self {
+        let log_db_path = std::env::var("LOG_DB_PATH")
+            .unwrap_or_else(|_| "data/panorama_logs.db".into());
+
+        let log_db = Connection::open_with_flags(
+            &log_db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .ok()
+        .map(Mutex::new);
+
+        if log_db.is_none() {
+            tracing::warn!("Could not open log database at {log_db_path} — log/error panels will be empty");
+        }
+
+        // WebAuthn setup — requires WEBAUTHN_RP_ID and WEBAUTHN_RP_ORIGIN
+        let (webauthn, creds_path) = match (
+            std::env::var("WEBAUTHN_RP_ID"),
+            std::env::var("WEBAUTHN_RP_ORIGIN"),
+        ) {
+            (Ok(rp_id), Ok(rp_origin)) => {
+                match url::Url::parse(&rp_origin) {
+                    Ok(origin_url) => {
+                        match webauthn_rs::WebauthnBuilder::new(&rp_id, &origin_url) {
+                            Ok(builder) => {
+                                let wa = builder.rp_name("Panorama Admin").build();
+                                match wa {
+                                    Ok(wa) => {
+                                        let path = std::env::var("WEBAUTHN_CREDENTIALS_PATH")
+                                            .unwrap_or_else(|_| "data/webauthn_credentials.json".into());
+                                        tracing::info!("WebAuthn enabled (RP: {rp_id})");
+                                        (Some(wa), Some(path))
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("WebAuthn build failed: {e} — falling back to password auth");
+                                        (None, None)
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("WebAuthn builder failed: {e} — falling back to password auth");
+                                (None, None)
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Invalid WEBAUTHN_RP_ORIGIN: {e} — falling back to password auth");
+                        (None, None)
+                    }
+                }
+            }
+            _ => {
+                tracing::info!("WebAuthn not configured (set WEBAUTHN_RP_ID and WEBAUTHN_RP_ORIGIN to enable)");
+                (None, None)
+            }
+        };
+
+        let stored_creds = creds_path
+            .as_deref()
+            .map(crate::auth::webauthn::load_credentials)
+            .unwrap_or_default();
+
         Self {
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
@@ -77,6 +150,12 @@ impl AppState {
             cerebro_url: std::env::var("CEREBRO_URL").unwrap_or_else(|_| "http://localhost:8101".into()),
             datastore_url: std::env::var("DATASTORE_URL").unwrap_or_else(|_| "http://localhost:8102".into()),
             gateway_url: std::env::var("GATEWAY_URL").unwrap_or_else(|_| "http://localhost:8800".into()),
+            log_db,
+            webauthn,
+            webauthn_credentials: Mutex::new(stored_creds),
+            webauthn_credentials_path: creds_path,
+            webauthn_reg_state: Mutex::new(None),
+            webauthn_auth_state: Mutex::new(None),
         }
     }
 }

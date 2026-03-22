@@ -11,6 +11,10 @@ pub struct AnalogConfig {
     pub allowed_senders: Vec<String>,
     /// Owner phone number for TOTP-protected commands.
     pub owner_number: Option<String>,
+    /// TOTP shared secret (base32-encoded) for owner verification.
+    pub owner_totp_secret: Option<String>,
+    /// Datastore URL for recognized sender persistence.
+    pub datastore_url: Option<String>,
 }
 
 impl AnalogConfig {
@@ -35,6 +39,8 @@ impl AnalogConfig {
             telnyx_public_key: std::env::var("TELNYX_PUBLIC_KEY").ok(),
             allowed_senders: allowed,
             owner_number: std::env::var("ANALOG_OWNER_NUMBER").ok(),
+            owner_totp_secret: std::env::var("OWNER_TOTP_SECRET").ok(),
+            datastore_url: std::env::var("DATASTORE_URL").ok(),
         })
     }
 }

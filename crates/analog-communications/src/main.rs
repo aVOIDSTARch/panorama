@@ -39,10 +39,14 @@ async fn main() {
         .build()
         .expect("failed to build HTTP client");
 
+    // Load recognized senders from Datastore (best-effort)
+    let recognized_senders = load_recognized_senders(&http, config.datastore_url.as_deref()).await;
+
     let state = AppState {
         config,
         cloak: cloak.clone(),
         http,
+        recognized_senders: std::sync::Arc::new(std::sync::Mutex::new(recognized_senders)),
     };
 
     // Webhook route (Telnyx verifies via its own signature, not Cloak)
@@ -65,6 +69,42 @@ async fn main() {
         .await
         .expect("failed to bind");
     axum::serve(listener, app).await.expect("server error");
+}
+
+/// Load recognized senders from Datastore at startup.
+/// Returns an empty list if Datastore is unavailable (non-fatal).
+async fn load_recognized_senders(http: &reqwest::Client, datastore_url: Option<&str>) -> Vec<String> {
+    let url = match datastore_url {
+        Some(u) => format!("{u}/query"),
+        None => return Vec::new(),
+    };
+
+    let query = json!({
+        "collection": "_recognized_senders",
+        "query": {},
+        "limit": 10000,
+    });
+
+    match http.post(&url).json(&query).send().await {
+        Ok(resp) if resp.status().is_success() => {
+            let body: serde_json::Value = resp.json().await.unwrap_or_default();
+            body.as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.get("phone").and_then(|p| p.as_str()).map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default()
+        }
+        Ok(resp) => {
+            tracing::warn!(status = %resp.status(), "Failed to load recognized senders from Datastore");
+            Vec::new()
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "Datastore unreachable — starting with empty recognized senders list");
+            Vec::new()
+        }
+    }
 }
 
 async fn health_handler(State(state): State<AppState>) -> impl IntoResponse {

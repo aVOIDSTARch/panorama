@@ -27,6 +27,9 @@ serde_json = { workspace = true }
 # Time
 chrono = { workspace = true }
 
+# Database (log viewer reads panorama_logs.db directly)
+rusqlite = { workspace = true }
+
 # Logging / tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -34,6 +37,10 @@ tracing-subscriber = { workspace = true }
 # Error handling
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+
+# WebAuthn (FIDO2 / YubiKey)
+webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
+url = "2"
 
 # Cloak integration
 cloak-sdk = { path = "../cloak-sdk" }

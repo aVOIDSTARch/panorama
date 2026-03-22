@@ -1,4 +1,5 @@
 pub mod session;
+pub mod webauthn;
 
 use axum::{
     extract::Request,
@@ -14,7 +15,7 @@ use axum::{
 pub async fn require_auth(request: Request, next: Next) -> Response {
     // Allow static assets and health through
     let path = request.uri().path();
-    if path.starts_with("/static/") || path == "/health" || path == "/login" {
+    if path.starts_with("/static/") || path == "/health" || path == "/login" || path.starts_with("/auth/") {
         return next.run(request).await;
     }
 
