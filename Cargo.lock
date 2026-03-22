@@ -1503,6 +1503,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "panorama-integration-tests"
+version = "0.1.0"
+dependencies = [
+ "cloak-core",
+ "cloak-tokens",
+ "cortex-core",
+ "reqwest",
+ "serde_json",
+ "test-harness",
+ "tokio",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2198,6 +2211,26 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "test-harness"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "cloak-core",
+ "cloak-registry",
+ "cloak-sdk",
+ "cloak-server",
+ "cloak-tokens",
+ "cortex-api",
+ "cortex-core",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

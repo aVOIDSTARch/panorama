@@ -12,7 +12,7 @@ use crate::state::AppState;
 ///   *    /{service_name}/{rest:path}   — proxy to downstream service (auth required)
 pub fn build(state: AppState) -> Router {
     let proxy_routes = Router::new()
-        .route("/{service_name}/{*rest}", axum::routing::any(proxy_request))
+        .route("/:service_name/*rest", axum::routing::any(proxy_request))
         .layer(middleware::from_fn_with_state(
             state.cloak.clone(),
             cloak_sdk::middleware::cloak_auth,

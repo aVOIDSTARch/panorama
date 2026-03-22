@@ -27,23 +27,23 @@ async fn main() {
         .route("/schema", routing::get(routes::list_tables))
         .route("/schema", routing::post(routes::create_table))
         // Object CRUD
-        .route("/objects/{table}", routing::get(routes::list_objects))
-        .route("/objects/{table}", routing::post(routes::insert_object))
-        .route("/objects/{table}/{id}", routing::get(routes::get_object))
+        .route("/objects/:table", routing::get(routes::list_objects))
+        .route("/objects/:table", routing::post(routes::insert_object))
+        .route("/objects/:table/:id", routing::get(routes::get_object))
         .route(
-            "/objects/{table}/{id}",
+            "/objects/:table/:id",
             routing::delete(routes::delete_object),
         )
         // Queries
         .route("/queries", routing::post(routes::execute_query))
         // Blobs
-        .route("/blobs/{namespace}", routing::post(routes::upload_blob))
+        .route("/blobs/:namespace", routing::post(routes::upload_blob))
         .route(
-            "/blobs/{namespace}/{blob_id}",
+            "/blobs/:namespace/:blob_id",
             routing::get(routes::get_blob),
         )
         .route(
-            "/blobs/{namespace}/{blob_id}",
+            "/blobs/:namespace/:blob_id",
             routing::delete(routes::delete_blob),
         )
         .layer(middleware::from_fn_with_state(

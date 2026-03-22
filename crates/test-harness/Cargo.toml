@@ -1,0 +1,21 @@
+[package]
+name = "test-harness"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cloak-core = { path = "../cloak-core" }
+cloak-server = { path = "../cloak-server" }
+cloak-sdk = { path = "../cloak-sdk" }
+cloak-registry = { path = "../cloak-registry" }
+cloak-tokens = { path = "../cloak-tokens" }
+cortex-api = { path = "../cortex-api" }
+cortex-core = { path = "../cortex-core" }
+
+tokio = { workspace = true }
+axum = { workspace = true }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

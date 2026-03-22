@@ -18,7 +18,7 @@ pub fn routes() -> Router<RegistryRouterState> {
     Router::new()
         .route("/cloak/services/register", post(register_service))
         .route(
-            "/cloak/services/{service_id}/halt-stream",
+            "/cloak/services/:service_id/halt-stream",
             get(halt_stream),
         )
         .route("/cloak/services", get(list_services))

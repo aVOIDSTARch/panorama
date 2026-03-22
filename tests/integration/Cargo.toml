@@ -1,0 +1,27 @@
+[package]
+name = "panorama-integration-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+test-harness = { path = "../../crates/test-harness" }
+cloak-core = { path = "../../crates/cloak-core" }
+cloak-tokens = { path = "../../crates/cloak-tokens" }
+cortex-core = { path = "../../crates/cortex-core" }
+
+tokio = { workspace = true }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+
+[[test]]
+name = "cold_start"
+path = "tests/cold_start.rs"
+
+[[test]]
+name = "token_flow"
+path = "tests/token_flow.rs"
+
+[[test]]
+name = "halt_cascade"
+path = "tests/halt_cascade.rs"

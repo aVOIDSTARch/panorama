@@ -3,11 +3,11 @@
 //! Routes requests to downstream services (Episteme, Cerebro, Datastore)
 //! after validating tokens via Cloak. Manages per-service health state.
 
-mod config;
-mod health;
-mod proxy;
-mod router;
-mod state;
+pub mod config;
+pub mod health;
+pub mod proxy;
+pub mod router;
+pub mod state;
 
 use tracing::info;
 use tracing_subscriber::EnvFilter;

@@ -26,6 +26,11 @@ pub struct AppState {
 impl AppState {
     pub async fn init() -> Result<Self, CloakError> {
         let config = CloakConfig::from_env()?;
+        Self::init_with_config(config).await
+    }
+
+    /// Initialize with a pre-built config (used by integration tests to avoid env vars).
+    pub async fn init_with_config(config: CloakConfig) -> Result<Self, CloakError> {
 
         let infisical = InfisicalClient::new(
             config.infisical_url.clone(),

@@ -47,7 +47,7 @@ pub fn build_request_router(state: Arc<AppState>) -> Router {
     // Authenticated routes — cloak middleware verifies tokens and inserts TokenClaims
     let authed = Router::new()
         .route("/routes", get(list_routes_handler))
-        .route("/routes/{route_key}", get(get_route_handler))
+        .route("/routes/:route_key", get(get_route_handler))
         .route("/dispatch", post(dispatch_handler))
         .layer(middleware::from_fn_with_state(
             state.cloak.clone(),
@@ -72,7 +72,7 @@ pub fn build_admin_router(state: Arc<AppState>) -> Router {
         .route("/admin/status", get(admin_status_handler))
         .route("/admin/kill", delete(admin_kill_handler))
         .route("/admin/resume", post(admin_resume_handler))
-        .route("/admin/probe/{route_key}", post(admin_probe_handler))
+        .route("/admin/probe/:route_key", post(admin_probe_handler))
         .route("/admin/config/reload", post(admin_config_reload_handler))
         .route("/admin/cost/summary", get(admin_cost_summary_handler))
         .route("/admin/budget", get(admin_budget_get_handler))

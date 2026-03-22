@@ -7,7 +7,7 @@ use cloak_core::CloakError;
 use crate::cache::SecretCache;
 
 pub fn routes() -> Router<SecretCache> {
-    Router::new().route("/cloak/secrets/{key}", get(get_secret))
+    Router::new().route("/cloak/secrets/:key", get(get_secret))
 }
 
 async fn get_secret(

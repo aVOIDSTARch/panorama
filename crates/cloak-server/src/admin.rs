@@ -13,7 +13,7 @@ pub fn routes(state: AppState) -> Router {
     Router::new()
         .route("/cloak/admin/halt", post(halt_all))
         .route("/cloak/admin/resume", post(resume))
-        .route("/cloak/admin/halt/{service_id}", post(halt_service))
+        .route("/cloak/admin/halt/:service_id", post(halt_service))
         .with_state(state)
 }
 
@@ -67,12 +67,16 @@ async fn halt_service(
         .and_then(|v| v.as_str())
         .unwrap_or("operator");
 
-    let event = sse::halt_event(Some(&service_id), reason);
-    let sent = state.registry.send_to(&service_id, event);
-
-    if !sent {
+    // Check registration first — send_to returns false both when the service
+    // isn't registered AND when no SSE receivers are active (no listeners yet).
+    if !state.registry.is_registered(&service_id) {
         return Err(CloakError::ServiceNotRegistered(service_id));
     }
+
+    let event = sse::halt_event(Some(&service_id), reason);
+    state.registry.send_to(&service_id, event);
+    // send_to may return false if no SSE listener is connected — that's fine,
+    // the halt was still recorded at the Cloak level.
 
     tracing::warn!("HALT service {service_id}: {reason}");
 

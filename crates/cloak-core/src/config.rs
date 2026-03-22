@@ -42,4 +42,20 @@ impl CloakConfig {
 
         Ok(config)
     }
+
+    /// Create a config suitable for integration tests — dummy Infisical values,
+    /// no env vars needed.
+    pub fn for_testing(port: u16) -> Self {
+        Self {
+            port,
+            infisical_url: "http://127.0.0.1:19999".into(),
+            infisical_token: "test-token".into(),
+            infisical_project: "test-project".into(),
+            infisical_env: "test".into(),
+            secret_cache_ttl_secs: 3600,
+            log_level: "warn".into(),
+            tailscale_interface: "lo0".into(),
+            admin_password_hash: None,
+        }
+    }
 }

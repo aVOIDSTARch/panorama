@@ -31,6 +31,10 @@ members = [
 
     # Analog communications — SMS inbound, IDEA pipeline
     "crates/analog-communications",
+
+    # Test infrastructure
+    "crates/test-harness",
+    "tests/integration",
 ]
 resolver = "2"
 
