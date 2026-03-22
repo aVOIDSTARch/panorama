@@ -1,0 +1,7 @@
+[submodule "services/cerebro"]
+	path = services/cerebro
+	url = https://github.com/aVOIDSTARch/cerebro.git
+
+[submodule "services/episteme"]
+	path = services/episteme
+	url = https://github.com/aVOIDSTARch/episteme.git
