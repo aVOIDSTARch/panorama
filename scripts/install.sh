@@ -197,10 +197,10 @@ ANALOG_PORT=$(prompt_value "Analog communications port" "8600")
 
 echo ""
 echo "External service configuration:"
-INFISICAL_URL=$(prompt_value "Infisical URL" "https://infisical.example.com")
-INFISICAL_TOKEN=$(prompt_secret "Infisical service token" "changeme")
-INFISICAL_PROJECT=$(prompt_value "Infisical project ID" "")
-INFISICAL_ENV=$(prompt_value "Infisical environment" "production")
+CLOAK_INFISICAL_URL=$(prompt_value "Infisical URL" "https://infisical.example.com")
+CLOAK_INFISICAL_TOKEN=$(prompt_secret "Infisical service token" "changeme")
+CLOAK_INFISICAL_PROJECT=$(prompt_value "Infisical project ID" "placeholder")
+CLOAK_INFISICAL_ENV=$(prompt_value "Infisical environment" "production")
 
 echo ""
 ADMIN_PASSWORD=$(prompt_secret "Admin interface password" "$(openssl rand -hex 16)")
@@ -230,10 +230,10 @@ cat > "$PANORAMA_DIR/.env" <<ENVEOF
 
 # Cloak
 CLOAK_PORT=$CLOAK_PORT
-INFISICAL_URL=$INFISICAL_URL
-INFISICAL_TOKEN=$INFISICAL_TOKEN
-INFISICAL_PROJECT=$INFISICAL_PROJECT
-INFISICAL_ENV=$INFISICAL_ENV
+CLOAK_INFISICAL_URL=$CLOAK_INFISICAL_URL
+CLOAK_INFISICAL_TOKEN=$CLOAK_INFISICAL_TOKEN
+CLOAK_INFISICAL_PROJECT=$CLOAK_INFISICAL_PROJECT
+CLOAK_INFISICAL_ENV=$CLOAK_INFISICAL_ENV
 SECRET_CACHE_TTL_SECS=3600
 LOG_LEVEL=info
 
@@ -244,8 +244,8 @@ CLOAK_URL=http://127.0.0.1:$CLOAK_PORT
 
 # Datastore
 DATASTORE_PORT=$DATASTORE_PORT
-DATASTORE_SQLITE_PATH=$DATA_DIR/datastore.db
-DATASTORE_BLOB_PATH=$DATA_DIR/blobs
+DATASTORE_DB_PATH=$DATA_DIR/datastore.db
+DATASTORE_BLOB_ROOT=$DATA_DIR/blobs
 DATASTORE_URL=http://127.0.0.1:$DATASTORE_PORT
 
 # Gateway
@@ -319,6 +319,13 @@ for entry in "${RUST_SERVICES[@]}"; do
         wants="Wants=panorama-cloak-server.service"
     fi
 
+    # Gateway requires "serve" subcommand with config path
+    if [[ "$bin" == "gateway" ]]; then
+        exec_start="$PANORAMA_DIR/target/release/$bin serve -c $PANORAMA_DIR/crates/gateway/gateway.toml"
+    else
+        exec_start="$PANORAMA_DIR/target/release/$bin"
+    fi
+
     cat > "/etc/systemd/system/${service_name}.service" <<UNITEOF
 [Unit]
 Description=Panorama — $desc
@@ -330,7 +337,7 @@ Type=simple
 User=$PANORAMA_USER
 WorkingDirectory=$PANORAMA_DIR
 EnvironmentFile=$PANORAMA_DIR/.env
-ExecStart=$PANORAMA_DIR/target/release/$bin
+ExecStart=$exec_start
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -356,7 +363,7 @@ Type=simple
 User=$PANORAMA_USER
 WorkingDirectory=$PANORAMA_DIR/services/cerebro
 EnvironmentFile=$PANORAMA_DIR/.env
-ExecStart=/usr/bin/node dist/api/server.js
+ExecStart=/usr/bin/node dist/src/api/server.js
 Restart=on-failure
 RestartSec=5
 

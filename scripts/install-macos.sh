@@ -225,10 +225,10 @@ ANALOG_PORT=$(prompt_value "Analog communications port" "8600")
 
 echo ""
 echo "External service configuration:"
-INFISICAL_URL=$(prompt_value "Infisical URL" "https://infisical.example.com")
-INFISICAL_TOKEN=$(prompt_secret "Infisical service token" "changeme")
-INFISICAL_PROJECT=$(prompt_value "Infisical project ID" "")
-INFISICAL_ENV=$(prompt_value "Infisical environment" "production")
+CLOAK_INFISICAL_URL=$(prompt_value "Infisical URL" "https://infisical.example.com")
+CLOAK_INFISICAL_TOKEN=$(prompt_secret "Infisical service token" "changeme")
+CLOAK_INFISICAL_PROJECT=$(prompt_value "Infisical project ID" "placeholder")
+CLOAK_INFISICAL_ENV=$(prompt_value "Infisical environment" "production")
 
 echo ""
 ADMIN_PASSWORD=$(prompt_secret "Admin interface password" "$(openssl rand -hex 16)")
@@ -258,10 +258,10 @@ cat > "$PANORAMA_DIR/.env" <<ENVEOF
 
 # Cloak
 CLOAK_PORT=$CLOAK_PORT
-INFISICAL_URL=$INFISICAL_URL
-INFISICAL_TOKEN=$INFISICAL_TOKEN
-INFISICAL_PROJECT=$INFISICAL_PROJECT
-INFISICAL_ENV=$INFISICAL_ENV
+CLOAK_INFISICAL_URL=$CLOAK_INFISICAL_URL
+CLOAK_INFISICAL_TOKEN=$CLOAK_INFISICAL_TOKEN
+CLOAK_INFISICAL_PROJECT=$CLOAK_INFISICAL_PROJECT
+CLOAK_INFISICAL_ENV=$CLOAK_INFISICAL_ENV
 SECRET_CACHE_TTL_SECS=3600
 LOG_LEVEL=info
 
@@ -272,8 +272,8 @@ CLOAK_URL=http://127.0.0.1:$CLOAK_PORT
 
 # Datastore
 DATASTORE_PORT=$DATASTORE_PORT
-DATASTORE_SQLITE_PATH=$DATA_DIR/datastore.db
-DATASTORE_BLOB_PATH=$DATA_DIR/blobs
+DATASTORE_DB_PATH=$DATA_DIR/datastore.db
+DATASTORE_BLOB_ROOT=$DATA_DIR/blobs
 DATASTORE_URL=http://127.0.0.1:$DATASTORE_PORT
 
 # Gateway
@@ -348,8 +348,17 @@ generate_env_dict() {
 ENV_DICT="$(generate_env_dict)"
 
 create_plist() {
-    local label="$1" bin_path="$2" work_dir="$3" log_name="$4"
+    local label="$1" work_dir="$2" log_name="$3"
+    shift 3
+    local args=("$@")
     local plist_path="$LAUNCH_AGENTS_DIR/${label}.plist"
+
+    # Build ProgramArguments XML
+    local args_xml=""
+    for arg in "${args[@]}"; do
+        args_xml="$args_xml        <string>$arg</string>
+"
+    done
 
     cat > "$plist_path" <<PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -360,8 +369,7 @@ create_plist() {
     <string>$label</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$bin_path</string>
-    </array>
+$args_xml    </array>
     <key>WorkingDirectory</key>
     <string>$work_dir</string>
 $ENV_DICT
@@ -383,31 +391,20 @@ PLISTEOF
     echo "  Created $plist_path"
 }
 
-RUST_SERVICES=(
-    "cloak-server:Cloak Auth Server"
-    "cortex-api:Cortex Service Proxy"
-    "datastore:Datastore Storage"
-    "gateway:Gateway LLM Router"
-    "wheelhouse:Wheelhouse Agent Orchestrator"
-    "admin-interface:Admin Interface"
-    "analog-communications:Analog SMS Pipeline"
-)
-
-for entry in "${RUST_SERVICES[@]}"; do
-    IFS=: read -r bin desc <<< "$entry"
-    create_plist "com.panorama.${bin}" "$PANORAMA_DIR/target/release/$bin" "$PANORAMA_DIR" "$bin"
+# Standard Rust services (no extra args)
+for bin in cloak-server cortex-api datastore wheelhouse admin-interface analog-communications; do
+    create_plist "com.panorama.${bin}" "$PANORAMA_DIR" "$bin" \
+        "$PANORAMA_DIR/target/release/$bin"
 done
 
-# Cerebro service (Node.js)
+# Gateway needs "serve" subcommand with config path
+create_plist "com.panorama.gateway" "$PANORAMA_DIR" "gateway" \
+    "$PANORAMA_DIR/target/release/gateway" "serve" "-c" "$PANORAMA_DIR/crates/gateway/gateway.toml"
+
+# Cerebro service (Node.js) — entrypoint is dist/src/api/server.js
 NODE_BIN="$(command -v node)"
-create_plist "com.panorama.cerebro" "$NODE_BIN" "$PANORAMA_DIR/services/cerebro" "cerebro"
-
-# Fix Cerebro plist to pass the script as an argument
-CEREBRO_PLIST="$LAUNCH_AGENTS_DIR/com.panorama.cerebro.plist"
-sed -i '' "s|<string>$NODE_BIN</string>|<string>$NODE_BIN</string>\\
-        <string>$PANORAMA_DIR/services/cerebro/dist/api/server.js</string>|" "$CEREBRO_PLIST"
-
-echo "  Updated com.panorama.cerebro.plist with Node.js entrypoint"
+create_plist "com.panorama.cerebro" "$PANORAMA_DIR/services/cerebro" "cerebro" \
+    "$NODE_BIN" "$PANORAMA_DIR/services/cerebro/dist/src/api/server.js"
 
 # ── Step 11: Set permissions ─────────────────────────────────────────────────
 progress "Setting file permissions"
