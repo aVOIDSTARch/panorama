@@ -2,24 +2,19 @@
 set -euo pipefail
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Panorama — Interactive Install Script for Ubuntu
+# Panorama — Interactive Install Script for macOS
 #
 # Installs all system dependencies, builds Rust services, sets up databases,
-# creates systemd units, and generates the .env configuration.
+# creates launchd agents, and generates the .env configuration.
 #
-# Usage:  sudo ./scripts/install.sh
+# Usage:  ./scripts/install-macos.sh
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Auto-detect macOS and redirect to the macOS-specific installer
-if [[ "$(uname -s)" == "Darwin" ]]; then
-    echo "Detected macOS — launching install-macos.sh instead."
-    exec "$(dirname "${BASH_SOURCE[0]}")/install-macos.sh" "$@"
-fi
-
-PANORAMA_DIR="/srv/panorama"
-PANORAMA_USER="panorama"
-DATA_DIR="/srv/panorama/data"
+PANORAMA_DIR="${PANORAMA_DIR:-$HOME/panorama}"
+DATA_DIR="$PANORAMA_DIR/data"
+LOG_DIR="$HOME/Library/Logs/panorama"
 LOG_DB="$DATA_DIR/panorama_logs.db"
+LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -33,7 +28,7 @@ total_steps=13
 banner() {
     echo ""
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║              PANORAMA — System Install                      ║${NC}"
+    echo -e "${CYAN}║              PANORAMA — macOS Install                       ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
@@ -69,9 +64,9 @@ prompt_secret() {
     echo "${value:-$default}"
 }
 
-check_root() {
-    if [[ $EUID -ne 0 ]]; then
-        echo -e "${RED}Error: This script must be run as root (sudo).${NC}"
+check_macos() {
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        echo -e "${RED}Error: This script is for macOS only. Use install.sh for Linux.${NC}"
         exit 1
     fi
 }
@@ -81,9 +76,9 @@ check_root() {
 # ──────────────────────────────────────────────────────────────────────────────
 
 banner
-check_root
+check_macos
 
-echo "This script will install Panorama and all its services on this machine."
+echo "This script will install Panorama and all its services on this Mac."
 echo "Target directory: $PANORAMA_DIR"
 echo ""
 if ! prompt_yn "Continue with installation?"; then
@@ -92,24 +87,39 @@ if ! prompt_yn "Continue with installation?"; then
 fi
 
 # ── Step 1: System packages ──────────────────────────────────────────────────
-progress "Installing system dependencies"
+progress "Installing system dependencies (Homebrew)"
 
-apt-get update -qq
-apt-get install -y -qq \
-    build-essential \
-    pkg-config \
-    libssl-dev \
-    curl \
-    git \
-    sqlite3 \
-    docker.io \
-    docker-compose \
-    nodejs \
-    npm \
-    python3 \
-    python3-pip \
-    python3-venv \
-    iproute2
+if ! command -v brew &>/dev/null; then
+    echo -e "${YELLOW}Homebrew not found. Installing...${NC}"
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Add brew to PATH for Apple Silicon Macs
+    if [[ -f /opt/homebrew/bin/brew ]]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    fi
+fi
+
+echo "Installing packages via Homebrew..."
+brew install pkg-config openssl node python3 sqlite3 2>/dev/null || true
+
+# Docker — check if Docker CLI is available (Docker Desktop or Colima)
+if ! command -v docker &>/dev/null; then
+    echo -e "${YELLOW}Docker not found.${NC}"
+    echo "Install Docker Desktop from https://www.docker.com/products/docker-desktop/"
+    echo "  or use Colima: brew install colima docker docker-compose && colima start"
+    if ! prompt_yn "Continue without Docker? (Meilisearch/ChromaDB won't start)" "n"; then
+        exit 1
+    fi
+else
+    echo "Docker found: $(docker --version)"
+fi
+
+# Xcode Command Line Tools
+if ! xcode-select -p &>/dev/null; then
+    echo "Installing Xcode Command Line Tools..."
+    xcode-select --install
+    echo -e "${YELLOW}Please complete the Xcode CLT installation dialog, then re-run this script.${NC}"
+    exit 1
+fi
 
 # ── Step 2: Rust toolchain ───────────────────────────────────────────────────
 progress "Installing Rust toolchain"
@@ -122,26 +132,27 @@ else
     source "$HOME/.cargo/env"
 fi
 
-# ── Step 3: Create service user and directories ─────────────────────────────
-progress "Creating panorama user and directories"
+# ── Step 3: Create directories ───────────────────────────────────────────────
+progress "Creating directories"
 
-if ! id "$PANORAMA_USER" &>/dev/null; then
-    useradd --system --create-home --shell /bin/bash "$PANORAMA_USER"
-    usermod -aG docker "$PANORAMA_USER"
-fi
+mkdir -p "$PANORAMA_DIR" "$DATA_DIR" "$DATA_DIR/blobs" "$LOG_DIR" "$LAUNCH_AGENTS_DIR"
 
-mkdir -p "$PANORAMA_DIR" "$DATA_DIR"
-mkdir -p "$DATA_DIR/blobs"
-mkdir -p /var/log/panorama
+echo "  Install dir: $PANORAMA_DIR"
+echo "  Data dir:    $DATA_DIR"
+echo "  Log dir:     $LOG_DIR"
 
 # ── Step 4: Clone or copy source ─────────────────────────────────────────────
 progress "Setting up source code"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-if [[ -d "$SCRIPT_DIR/Cargo.toml" ]] || [[ -f "$SCRIPT_DIR/Cargo.toml" ]]; then
+if [[ -f "$SCRIPT_DIR/Cargo.toml" ]]; then
     echo "Copying from local source: $SCRIPT_DIR"
-    rsync -a --exclude target --exclude .git "$SCRIPT_DIR/" "$PANORAMA_DIR/"
+    if [[ "$SCRIPT_DIR" != "$PANORAMA_DIR" ]]; then
+        rsync -a --exclude target --exclude .git "$SCRIPT_DIR/" "$PANORAMA_DIR/"
+    else
+        echo "Source and target are the same directory — skipping copy."
+    fi
 else
     REPO_URL=$(prompt_value "Git repository URL" "https://github.com/aVOIDSTARch/panorama.git")
     git clone --recursive "$REPO_URL" "$PANORAMA_DIR"
@@ -149,6 +160,14 @@ fi
 
 # ── Step 5: Build Rust services ──────────────────────────────────────────────
 progress "Building Rust services (release mode)"
+
+# Set OpenSSL paths for Homebrew (macOS ships LibreSSL which some crates reject)
+OPENSSL_PREFIX="$(brew --prefix openssl 2>/dev/null || echo "")"
+if [[ -n "$OPENSSL_PREFIX" ]]; then
+    export OPENSSL_DIR="$OPENSSL_PREFIX"
+    export PKG_CONFIG_PATH="${OPENSSL_PREFIX}/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+    echo "Using OpenSSL from: $OPENSSL_PREFIX"
+fi
 
 cd "$PANORAMA_DIR"
 cargo build --release 2>&1 | tail -5
@@ -171,11 +190,20 @@ fi
 # ── Step 7: Cerebro dependencies (Meilisearch + ChromaDB) ───────────────────
 progress "Starting Cerebro Docker dependencies"
 
-if [[ -f "$PANORAMA_DIR/services/cerebro/docker-compose.yml" ]]; then
+if [[ -f "$PANORAMA_DIR/services/cerebro/docker-compose.yml" ]] && command -v docker &>/dev/null; then
     if prompt_yn "Start Meilisearch + ChromaDB containers?"; then
         cd "$PANORAMA_DIR/services/cerebro"
-        docker-compose up -d
+        # Use 'docker compose' (v2 plugin) with fallback to 'docker-compose'
+        if docker compose version &>/dev/null; then
+            docker compose up -d
+        elif command -v docker-compose &>/dev/null; then
+            docker-compose up -d
+        else
+            echo -e "${YELLOW}Neither 'docker compose' nor 'docker-compose' found — skipping.${NC}"
+        fi
     fi
+else
+    echo -e "${YELLOW}Docker not available or docker-compose.yml not found — skipping.${NC}"
 fi
 
 # ── Step 8: Interactive configuration ────────────────────────────────────────
@@ -226,7 +254,7 @@ fi
 # Write .env
 cat > "$PANORAMA_DIR/.env" <<ENVEOF
 # ── Panorama Environment Configuration ──
-# Generated by install.sh on $(date -Iseconds)
+# Generated by install-macos.sh on $(date -Iseconds)
 
 # Cloak
 CLOAK_PORT=$CLOAK_PORT
@@ -288,113 +316,105 @@ echo -e "${GREEN}.env written to $PANORAMA_DIR/.env${NC}"
 # ── Step 9: Initialize databases ─────────────────────────────────────────────
 progress "Initializing databases"
 
-# The logging DB is auto-created by panorama-logging on first start.
-# Touch the data directory so services can write.
 touch "$DATA_DIR/datastore.db"
 echo "SQLite databases will be initialized on first service start (WAL mode)."
 
-# ── Step 10: Create systemd units ────────────────────────────────────────────
-progress "Creating systemd service units"
+# ── Step 10: Create launchd agents ───────────────────────────────────────────
+progress "Creating launchd agent plists"
+
+# Helper: read .env file and emit plist EnvironmentVariables dict entries
+env_to_plist_dict() {
+    local env_file="$1"
+    while IFS='=' read -r key value; do
+        # Skip comments and blank lines
+        [[ -z "$key" || "$key" =~ ^# ]] && continue
+        # Trim leading/trailing whitespace
+        key="$(echo "$key" | xargs)"
+        value="$(echo "$value" | xargs)"
+        [[ -z "$key" ]] && continue
+        echo "            <key>$key</key>"
+        echo "            <string>$value</string>"
+    done < "$env_file"
+}
+
+generate_env_dict() {
+    echo "        <key>EnvironmentVariables</key>"
+    echo "        <dict>"
+    env_to_plist_dict "$PANORAMA_DIR/.env"
+    echo "        </dict>"
+}
+
+# Cache the env dict so we don't re-parse for each service
+ENV_DICT="$(generate_env_dict)"
+
+create_plist() {
+    local label="$1" bin_path="$2" work_dir="$3" log_name="$4"
+    local plist_path="$LAUNCH_AGENTS_DIR/${label}.plist"
+
+    cat > "$plist_path" <<PLISTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$label</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$bin_path</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$work_dir</string>
+$ENV_DICT
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>$LOG_DIR/${log_name}.log</string>
+    <key>StandardErrorPath</key>
+    <string>$LOG_DIR/${log_name}.err.log</string>
+</dict>
+</plist>
+PLISTEOF
+
+    echo "  Created $plist_path"
+}
 
 RUST_SERVICES=(
-    "cloak-server:Cloak Auth Server:$CLOAK_PORT"
-    "cortex-api:Cortex Service Proxy:$CORTEX_PORT"
-    "datastore:Datastore Storage:$DATASTORE_PORT"
-    "gateway:Gateway LLM Router:$GATEWAY_PORT"
-    "wheelhouse:Wheelhouse Agent Orchestrator:$WHEELHOUSE_PORT"
-    "admin-interface:Admin Interface:$ADMIN_PORT"
-    "analog-communications:Analog SMS Pipeline:$ANALOG_PORT"
+    "cloak-server:Cloak Auth Server"
+    "cortex-api:Cortex Service Proxy"
+    "datastore:Datastore Storage"
+    "gateway:Gateway LLM Router"
+    "wheelhouse:Wheelhouse Agent Orchestrator"
+    "admin-interface:Admin Interface"
+    "analog-communications:Analog SMS Pipeline"
 )
 
 for entry in "${RUST_SERVICES[@]}"; do
-    IFS=: read -r bin desc port <<< "$entry"
-    service_name="panorama-${bin}"
-
-    # Cloak has no dependency on itself
-    if [[ "$bin" == "cloak-server" ]]; then
-        after="After=network.target"
-        wants=""
-    else
-        after="After=network.target panorama-cloak-server.service"
-        wants="Wants=panorama-cloak-server.service"
-    fi
-
-    cat > "/etc/systemd/system/${service_name}.service" <<UNITEOF
-[Unit]
-Description=Panorama — $desc
-$after
-$wants
-
-[Service]
-Type=simple
-User=$PANORAMA_USER
-WorkingDirectory=$PANORAMA_DIR
-EnvironmentFile=$PANORAMA_DIR/.env
-ExecStart=$PANORAMA_DIR/target/release/$bin
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=$service_name
-
-[Install]
-WantedBy=multi-user.target
-UNITEOF
-
-    echo "  Created ${service_name}.service"
+    IFS=: read -r bin desc <<< "$entry"
+    create_plist "com.panorama.${bin}" "$PANORAMA_DIR/target/release/$bin" "$PANORAMA_DIR" "$bin"
 done
 
 # Cerebro service (Node.js)
-cat > "/etc/systemd/system/panorama-cerebro.service" <<UNITEOF
-[Unit]
-Description=Panorama — Cerebro Knowledge Graph
-After=network.target docker.service panorama-cloak-server.service
-Requires=docker.service
+NODE_BIN="$(command -v node)"
+create_plist "com.panorama.cerebro" "$NODE_BIN" "$PANORAMA_DIR/services/cerebro" "cerebro"
 
-[Service]
-Type=simple
-User=$PANORAMA_USER
-WorkingDirectory=$PANORAMA_DIR/services/cerebro
-EnvironmentFile=$PANORAMA_DIR/.env
-ExecStart=/usr/bin/node dist/api/server.js
-Restart=on-failure
-RestartSec=5
+# Fix Cerebro plist to pass the script as an argument
+CEREBRO_PLIST="$LAUNCH_AGENTS_DIR/com.panorama.cerebro.plist"
+sed -i '' "s|<string>$NODE_BIN</string>|<string>$NODE_BIN</string>\\
+        <string>$PANORAMA_DIR/services/cerebro/dist/api/server.js</string>|" "$CEREBRO_PLIST"
 
-[Install]
-WantedBy=multi-user.target
-UNITEOF
-echo "  Created panorama-cerebro.service"
+echo "  Updated com.panorama.cerebro.plist with Node.js entrypoint"
 
-# cortex-mcp (MCP tool server — not a daemon, invoked by AI clients)
-cat > "/etc/systemd/system/panorama-cortex-mcp@.service" <<UNITEOF
-[Unit]
-Description=Panorama — Cortex MCP Server (instance %i)
-After=network.target panorama-cortex-api.service
-Wants=panorama-cortex-api.service
+# ── Step 11: Set permissions ─────────────────────────────────────────────────
+progress "Setting file permissions"
 
-[Service]
-Type=simple
-User=$PANORAMA_USER
-WorkingDirectory=$PANORAMA_DIR
-EnvironmentFile=$PANORAMA_DIR/.env
-ExecStart=$PANORAMA_DIR/target/release/cortex-mcp
-StandardInput=socket
-StandardOutput=socket
-StandardError=journal
-SyslogIdentifier=panorama-cortex-mcp
-
-[Install]
-WantedBy=multi-user.target
-UNITEOF
-echo "  Created panorama-cortex-mcp@.service (template for MCP clients)"
-
-systemctl daemon-reload
-
-# ── Step 11: Set ownership ───────────────────────────────────────────────────
-progress "Setting file ownership"
-
-chown -R "$PANORAMA_USER:$PANORAMA_USER" "$PANORAMA_DIR"
-chown -R "$PANORAMA_USER:$PANORAMA_USER" /var/log/panorama
+chmod -R u+rw "$PANORAMA_DIR"
+chmod 600 "$PANORAMA_DIR/.env"
+echo "Permissions set for current user: $(whoami)"
 
 # ── Step 12: Install MCP configuration ───────────────────────────────────────
 progress "Setting up MCP tool server"
@@ -420,43 +440,47 @@ echo ""
 # ── Step 13: Start services ──────────────────────────────────────────────────
 progress "Starting services"
 
-# Boot order matters: Cloak must be up before services that register with it.
 BOOT_ORDER=(
-    panorama-cloak-server
-    panorama-datastore
-    panorama-cortex-api
-    panorama-cerebro
-    panorama-gateway
-    panorama-wheelhouse
-    panorama-analog-communications
-    panorama-admin-interface
+    com.panorama.cloak-server
+    com.panorama.datastore
+    com.panorama.cortex-api
+    com.panorama.cerebro
+    com.panorama.gateway
+    com.panorama.wheelhouse
+    com.panorama.analog-communications
+    com.panorama.admin-interface
 )
 
-if prompt_yn "Enable and start all Panorama services now?"; then
+if prompt_yn "Load and start all Panorama services now?"; then
     for svc in "${BOOT_ORDER[@]}"; do
         echo -n "  Starting $svc... "
-        systemctl enable "$svc" --quiet 2>/dev/null || true
-        systemctl start "$svc" 2>/dev/null && echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}FAILED (check journalctl -u $svc)${NC}"
+        launchctl load "$LAUNCH_AGENTS_DIR/${svc}.plist" 2>/dev/null && \
+            echo -e "${GREEN}OK${NC}" || echo -e "${YELLOW}FAILED (check $LOG_DIR/)${NC}"
         sleep 1
     done
 else
-    echo "Services created but not started. Use:"
-    echo "  sudo systemctl start panorama-cloak-server"
-    echo "  sudo systemctl start panorama-cortex-api"
+    echo "Plists created but not loaded. To start manually:"
+    echo "  launchctl load ~/Library/LaunchAgents/com.panorama.cloak-server.plist"
+    echo "  launchctl load ~/Library/LaunchAgents/com.panorama.cortex-api.plist"
     echo "  ... etc"
+    echo ""
+    echo "To stop a service:"
+    echo "  launchctl unload ~/Library/LaunchAgents/com.panorama.cloak-server.plist"
 fi
 
 # ── Done ─────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║              Installation Complete                          ║${NC}"
+echo -e "${CYAN}║              Installation Complete (macOS)                  ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo "  Config:        $PANORAMA_DIR/.env"
 echo "  Data:          $DATA_DIR/"
+echo "  Logs:          $LOG_DIR/"
 echo "  Logs DB:       $LOG_DB"
 echo "  Binaries:      $PANORAMA_DIR/target/release/"
 echo "  Credentials:   $DATA_DIR/webauthn_credentials.json"
+echo "  Plists:        $LAUNCH_AGENTS_DIR/com.panorama.*.plist"
 echo ""
 echo "  Service ports:"
 echo "    Cloak:       http://127.0.0.1:$CLOAK_PORT"
@@ -470,8 +494,8 @@ echo ""
 echo "  MCP tools:     $PANORAMA_DIR/target/release/cortex-mcp (12 tools)"
 echo ""
 echo "  Commands:"
-echo "    sudo systemctl status 'panorama-*'"
-echo "    sudo journalctl -u panorama-cloak-server -f"
+echo "    launchctl list | grep panorama"
+echo "    tail -f $LOG_DIR/cloak-server.log"
 echo "    sqlite3 $LOG_DB 'SELECT * FROM _system_logs ORDER BY timestamp DESC LIMIT 10'"
 echo ""
 echo -e "  ${YELLOW}POST-INSTALL CHECKLIST:${NC}"
@@ -498,4 +522,9 @@ echo "    5. Owner TOTP verification configured ✓"
 fi
 echo "    6. Set Telnyx webhook URL to https://<your-domain>/sms-inbound"
 echo "    7. Initialize Episteme (Python service at :8100)"
+echo ""
+echo -e "  ${YELLOW}macOS-SPECIFIC NOTES:${NC}"
+echo "    • After editing .env, reload services: launchctl unload then load each plist"
+echo "    • Logs are in $LOG_DIR/ (not journalctl)"
+echo "    • To uninstall services: launchctl unload ~/Library/LaunchAgents/com.panorama.*.plist"
 echo ""
