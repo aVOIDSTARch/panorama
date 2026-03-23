@@ -125,10 +125,9 @@ impl CloakClient {
         }
 
         let config = self.config.clone();
-        let http = self.http.clone();
 
         tokio::spawn(async move {
-            crate::sse::listen_halt_stream(http, config, state, halt_stream_url).await;
+            crate::sse::listen_halt_stream(config, state, halt_stream_url).await;
         });
     }
 

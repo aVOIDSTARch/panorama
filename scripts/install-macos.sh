@@ -187,6 +187,19 @@ else
     echo -e "${YELLOW}Cerebro source not found — skipping (initialize submodules later)${NC}"
 fi
 
+# ── Step 6b: Build Episteme (Python) ──────────────────────────────────────────
+progress "Setting up Episteme (Python)"
+
+EPISTEME_SERVICE_DIR="$PANORAMA_DIR/services/episteme/interface/service"
+if [[ -f "$EPISTEME_SERVICE_DIR/requirements.txt" ]]; then
+    cd "$EPISTEME_SERVICE_DIR"
+    python3 -m venv .venv
+    .venv/bin/pip install -r requirements.txt
+    echo "Episteme venv created and dependencies installed"
+else
+    echo -e "${YELLOW}Episteme source not found — skipping${NC}"
+fi
+
 # ── Step 7: Cerebro dependencies (Meilisearch + ChromaDB) ───────────────────
 progress "Starting Cerebro Docker dependencies"
 
@@ -406,6 +419,15 @@ NODE_BIN="$(command -v node)"
 create_plist "com.panorama.cerebro" "$PANORAMA_DIR/services/cerebro" "cerebro" \
     "$NODE_BIN" "$PANORAMA_DIR/services/cerebro/dist/src/api/server.js"
 
+# Episteme service (Python)
+if [[ -f "$PANORAMA_DIR/services/episteme/interface/service/.venv/bin/python" ]]; then
+    create_plist "com.panorama.episteme" "$PANORAMA_DIR/services/episteme/interface/service" "episteme" \
+        "$PANORAMA_DIR/services/episteme/interface/service/.venv/bin/python" \
+        "$PANORAMA_DIR/services/episteme/interface/service/main.py"
+else
+    echo -e "${YELLOW}Episteme venv not found — skipping plist creation${NC}"
+fi
+
 # ── Step 11: Set permissions ─────────────────────────────────────────────────
 progress "Setting file permissions"
 
@@ -442,6 +464,7 @@ BOOT_ORDER=(
     com.panorama.datastore
     com.panorama.cortex-api
     com.panorama.cerebro
+    com.panorama.episteme
     com.panorama.gateway
     com.panorama.wheelhouse
     com.panorama.analog-communications

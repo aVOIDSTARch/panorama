@@ -12,11 +12,17 @@ use crate::state::CloakState;
 /// Reconnects with exponential backoff. After max consecutive failures,
 /// self-halts (fail closed) — matching Episteme Python client behavior.
 pub(crate) async fn listen_halt_stream(
-    http: reqwest::Client,
     config: CloakConfig,
     state: CloakState,
     halt_stream_url: String,
 ) {
+    // Build a dedicated client without a request timeout.
+    // The shared CloakClient uses a 10s timeout which kills long-lived SSE
+    // streams before the server's 15s keepalive arrives.
+    let http = reqwest::Client::builder()
+        .build()
+        .expect("failed to build SSE client");
+
     let mut consecutive_failures: u32 = 0;
     let mut delay_secs = config.sse_base_delay_secs;
 

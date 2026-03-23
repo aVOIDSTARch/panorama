@@ -14,7 +14,7 @@ TODO in identity.rs	Datastore-backed list of previously-seen senders
 ### Tailscale binding	Design only, no code	Bind admin-interface to Tailscale interface only (or IP allowlist)
 cortex-mcp	4-line stub	Full MCP tool auto-generation from cortex-manifest.toml
 ### Episteme setup
-Submodule exists, no install	Python service needs venv setup, pip install, startup script
+Submodule exists, no install	Python service needs venv setup, pip install, startup script //should be rust not python
 ### Cross-language token tests
 Not started	Rust mint -> Python verify -> TypeScript verify
 ### CI/CD

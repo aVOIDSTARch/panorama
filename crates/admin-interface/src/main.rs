@@ -70,20 +70,27 @@ fn resolve_bind_address(port: u16) -> String {
         _ => return format!("0.0.0.0:{port}"),
     };
 
-    // Use `ip addr show <interface>` to find the IPv4 address
-    match std::process::Command::new("ip")
-        .args(["addr", "show", &interface])
-        .output()
-    {
+    // Query the interface for its IPv4 address (platform-specific command)
+    let output = if cfg!(target_os = "macos") {
+        std::process::Command::new("ifconfig")
+            .arg(&interface)
+            .output()
+    } else {
+        std::process::Command::new("ip")
+            .args(["addr", "show", &interface])
+            .output()
+    };
+
+    match output {
         Ok(output) if output.status.success() => {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            // Parse "inet 100.x.y.z/32" from ip addr output
+            // Both `ip addr` and `ifconfig` output "inet X.X.X.X" lines
             for line in stdout.lines() {
                 let trimmed = line.trim();
                 if trimmed.starts_with("inet ") && !trimmed.starts_with("inet6") {
                     if let Some(addr) = trimmed
                         .strip_prefix("inet ")
-                        .and_then(|s| s.split('/').next())
+                        .and_then(|s| s.split(|c: char| c == '/' || c.is_whitespace()).next())
                     {
                         tracing::info!(
                             "Binding admin interface to {interface} ({addr})"
