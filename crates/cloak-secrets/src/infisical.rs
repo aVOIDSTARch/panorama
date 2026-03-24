@@ -1,8 +1,11 @@
+use std::sync::Arc;
+
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tracing::{error, info};
+use tokio::sync::RwLock;
+use tracing::{error, info, warn};
 
-use cloak_core::CloakError;
+use cloak_core::{CloakError, InfisicalAuth};
 
 /// The sole HTTP client that talks to the self-hosted Infisical instance.
 /// No other code in the system should communicate with Infisical directly.
@@ -10,9 +13,23 @@ use cloak_core::CloakError;
 pub struct InfisicalClient {
     http: Client,
     base_url: String,
-    auth_token: String,
+    auth_token: Arc<RwLock<String>>,
+    auth_config: Option<UniversalAuthConfig>,
     project_id: String,
     environment: String,
+}
+
+#[derive(Debug, Clone)]
+struct UniversalAuthConfig {
+    client_id: String,
+    client_secret: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UniversalAuthResponse {
+    access_token: String,
+    expires_in: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,19 +65,77 @@ pub struct TokenValidateResponse {
 }
 
 impl InfisicalClient {
+    /// Create a new client. For Universal Auth, call `authenticate()` after construction
+    /// to obtain the initial access token.
     pub fn new(
         base_url: String,
-        auth_token: String,
+        auth: InfisicalAuth,
         project_id: String,
         environment: String,
     ) -> Self {
+        let (token, auth_config) = match auth {
+            InfisicalAuth::UniversalAuth { client_id, client_secret } => (
+                String::new(),
+                Some(UniversalAuthConfig { client_id, client_secret }),
+            ),
+            InfisicalAuth::StaticToken(token) => (token, None),
+        };
+
         Self {
             http: Client::new(),
             base_url: base_url.trim_end_matches('/').to_string(),
-            auth_token,
+            auth_token: Arc::new(RwLock::new(token)),
+            auth_config,
             project_id,
             environment,
         }
+    }
+
+    /// Authenticate via Universal Auth (client ID + secret → access token).
+    /// No-op for static token auth.
+    pub async fn authenticate(&self) -> Result<(), CloakError> {
+        let config = match &self.auth_config {
+            Some(c) => c,
+            None => return Ok(()), // static token, nothing to do
+        };
+
+        let url = format!("{}/api/v1/auth/universal-auth/login", self.base_url);
+        let resp = self
+            .http
+            .post(&url)
+            .json(&serde_json::json!({
+                "clientId": config.client_id,
+                "clientSecret": config.client_secret,
+            }))
+            .send()
+            .await
+            .map_err(|e| {
+                error!("Universal Auth login failed: {e}");
+                CloakError::InfisicalUnavailable
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            error!("Universal Auth returned {status}: {body}");
+            return Err(CloakError::InfisicalUnavailable);
+        }
+
+        let data: UniversalAuthResponse = resp.json().await.map_err(|e| {
+            error!("Failed to parse Universal Auth response: {e}");
+            CloakError::Internal(format!("Universal Auth parse error: {e}"))
+        })?;
+
+        info!(
+            expires_in_secs = data.expires_in,
+            "Authenticated with Infisical via Universal Auth"
+        );
+        *self.auth_token.write().await = data.access_token;
+        Ok(())
+    }
+
+    async fn bearer_token(&self) -> String {
+        self.auth_token.read().await.clone()
     }
 
     /// Check that Infisical is reachable.
@@ -85,7 +160,7 @@ impl InfisicalClient {
         let resp = self
             .http
             .get(&url)
-            .header("Authorization", format!("Bearer {}", self.auth_token))
+            .header("Authorization", format!("Bearer {}", self.bearer_token().await))
             .send()
             .await
             .map_err(|e| {
@@ -129,7 +204,7 @@ impl InfisicalClient {
         let resp = self
             .http
             .get(&url)
-            .header("Authorization", format!("Bearer {}", self.auth_token))
+            .header("Authorization", format!("Bearer {}", self.bearer_token().await))
             .send()
             .await
             .map_err(|e| {
@@ -164,7 +239,7 @@ impl InfisicalClient {
         let resp = self
             .http
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.auth_token))
+            .header("Authorization", format!("Bearer {}", self.bearer_token().await))
             .json(&TokenValidatePayload {
                 token: token.to_string(),
             })

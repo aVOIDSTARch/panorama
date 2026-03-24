@@ -34,7 +34,7 @@ impl AppState {
 
         let infisical = InfisicalClient::new(
             config.infisical_url.clone(),
-            config.infisical_token.clone(),
+            config.infisical_auth.clone(),
             config.infisical_project.clone(),
             config.infisical_env.clone(),
         );
@@ -47,6 +47,11 @@ impl AppState {
             Err(e) => {
                 tracing::warn!("Infisical not reachable at startup: {e} (continuing anyway)");
             }
+        }
+
+        // Authenticate with Infisical (Universal Auth login if configured)
+        if let Err(e) = infisical.authenticate().await {
+            tracing::warn!("Infisical authentication failed: {e} (continuing anyway)");
         }
 
         let secret_cache = SecretCache::new(infisical.clone(), config.secret_cache_ttl_secs);
