@@ -1,0 +1,54 @@
+services:
+  infisical-db:
+    image: postgres:14-alpine
+    container_name: infisical-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: infisical
+      POSTGRES_USER: infisical
+      POSTGRES_PASSWORD: infisical_db_pass
+    volumes:
+      - infisical_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infisical"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  infisical-redis:
+    image: redis:7-alpine
+    container_name: infisical-redis
+    restart: unless-stopped
+    volumes:
+      - infisical_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  infisical:
+    image: infisical/infisical:latest-postgres
+    container_name: infisical
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      infisical-db:
+        condition: service_healthy
+      infisical-redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      ENCRYPTION_KEY: 6430b4b000e97c7ee313ba01b0f3e964
+      AUTH_SECRET: 9561b4069ca86e573bef9e1b03d91b17c66cd81ca4a5156b234a2a6f2bc69694
+      DB_CONNECTION_URI: postgres://infisical:infisical_db_pass@infisical-db:5432/infisical
+      REDIS_URL: redis://infisical-redis:6379
+      SITE_URL: http://localhost:8081
+      # Disable email verification for local use
+      SMTP_HOST: ""
+      INVITE_ONLY_SIGNUP: "false"
+
+volumes:
+  infisical_db_data:
+  infisical_redis_data:
