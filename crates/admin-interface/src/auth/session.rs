@@ -26,10 +26,13 @@ pub struct LoginForm {
 }
 
 /// Handle login form submission (password fallback).
-pub async fn login_submit(Form(form): Form<LoginForm>) -> impl IntoResponse {
-    let expected = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "panorama".into());
+pub async fn login_submit(
+    State(state): State<Arc<AppState>>,
+    Form(form): Form<LoginForm>,
+) -> impl IntoResponse {
+    let expected = &state.admin_password;
 
-    if form.password == expected {
+    if &form.password == expected {
         (
             StatusCode::SEE_OTHER,
             [

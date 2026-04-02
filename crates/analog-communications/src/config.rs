@@ -43,4 +43,28 @@ impl AnalogConfig {
             datastore_url: std::env::var("DATASTORE_URL").ok(),
         })
     }
+
+    /// Fetch secrets that live in Infisical (via Cloak) and override any env
+    /// fallback values. Non-fatal — if Cloak is unreachable the values set by
+    /// `from_env` are kept unchanged.
+    pub async fn load_cloak_secrets(&mut self, http: &reqwest::Client) {
+        async fn fetch(http: &reqwest::Client, cloak_url: &str, key: &str) -> Option<String> {
+            let url = format!("{}/cloak/secrets/{}", cloak_url, key);
+            let resp = http.get(&url).send().await.ok()?;
+            if !resp.status().is_success() {
+                return None;
+            }
+            let body: serde_json::Value = resp.json().await.ok()?;
+            body.get("value")?.as_str().map(String::from)
+        }
+
+        if let Some(val) = fetch(http, &self.cloak_url, "TELNYX_PUBLIC_KEY").await {
+            tracing::info!("Loaded TELNYX_PUBLIC_KEY from Cloak");
+            self.telnyx_public_key = Some(val);
+        }
+        if let Some(val) = fetch(http, &self.cloak_url, "OWNER_TOTP_SECRET").await {
+            tracing::info!("Loaded OWNER_TOTP_SECRET from Cloak");
+            self.owner_totp_secret = Some(val);
+        }
+    }
 }

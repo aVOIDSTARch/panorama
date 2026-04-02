@@ -24,4 +24,5 @@ scripts/seed-owner-identity.md
 .DS_Store
 .DS_Store
 .env
-.env
+
+*.db

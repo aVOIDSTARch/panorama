@@ -9,7 +9,22 @@ use admin_interface::auth;
 async fn main() {
     panorama_logging::init("admin-interface", Some("data/panorama_logs.db"));
 
-    let state = Arc::new(api::health::AppState::from_env());
+    let mut state = api::health::AppState::from_env();
+
+    // Fetch ADMIN_PASSWORD from Infisical via Cloak (overrides env fallback)
+    let secret_url = format!("{}/cloak/secrets/ADMIN_PASSWORD", state.cloak_url);
+    if let Ok(resp) = state.http.get(&secret_url).send().await {
+        if resp.status().is_success() {
+            if let Ok(body) = resp.json::<serde_json::Value>().await {
+                if let Some(pw) = body.get("value").and_then(|v| v.as_str()) {
+                    tracing::info!("Loaded ADMIN_PASSWORD from Cloak");
+                    state.admin_password = pw.to_string();
+                }
+            }
+        }
+    }
+
+    let state = Arc::new(state);
     let port: u16 = std::env::var("ADMIN_PORT")
         .unwrap_or_else(|_| "8400".into())
         .parse()

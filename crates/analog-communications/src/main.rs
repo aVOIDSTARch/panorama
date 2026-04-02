@@ -9,7 +9,7 @@ use analog_communications::AppState;
 async fn main() {
     panorama_logging::init("analog-communications", Some("data/panorama_logs.db"));
 
-    let config = AnalogConfig::from_env().expect("failed to load config");
+    let mut config = AnalogConfig::from_env().expect("failed to load config");
     let port = config.port;
 
     // Register with Cloak
@@ -38,6 +38,9 @@ async fn main() {
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .expect("failed to build HTTP client");
+
+    // Fetch secrets from Infisical via Cloak (best-effort, overrides env fallbacks)
+    config.load_cloak_secrets(&http).await;
 
     // Load recognized senders from Datastore (best-effort)
     let recognized_senders = load_recognized_senders(&http, config.datastore_url.as_deref()).await;

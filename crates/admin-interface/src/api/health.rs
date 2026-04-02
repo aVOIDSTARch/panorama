@@ -61,6 +61,7 @@ pub async fn services_panel(State(state): State<Arc<AppState>>) -> Html<String> 
 
 pub struct AppState {
     pub http: reqwest::Client,
+    pub admin_password: String,
     pub cloak_url: String,
     pub cortex_url: String,
     pub episteme_url: String,
@@ -144,6 +145,8 @@ impl AppState {
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
                 .expect("failed to build HTTP client"),
+            // Populated from env as fallback; overwritten from Cloak at startup
+            admin_password: std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "panorama".into()),
             cloak_url: std::env::var("CLOAK_URL").unwrap_or_else(|_| "http://localhost:8300".into()),
             cortex_url: std::env::var("CORTEX_URL").unwrap_or_else(|_| "http://localhost:9000".into()),
             episteme_url: std::env::var("EPISTEME_URL").unwrap_or_else(|_| "http://localhost:8100".into()),
